@@ -296,25 +296,25 @@ group_measures <- function(gr.col)
   
   m <- match(topicstoagencies$TopicNumber, groups$Topic)
   topicstoagencies$group <- groups[[group.col]][m]
-  topicstoagencies <- topicstoagencies[, list(GroupWords = sum(TopicWords)), by = "group,year,agency"]
-  topicstoagencies[, AllWords := sum(GroupWords), by = "group,year"]
+  topicstoagencies <- topicstoagencies[, list(GroupWords = sum(TopicWords, na.rm = T)), by = "group,year,agency"]
+  topicstoagencies[, AllWords := sum(GroupWords, na.rm = T), by = "group,year"]
   topicstoagencies[, GroupPercent := GroupWords/AllWords]
   
-  data <- topicstoagencies[, list(HHI = sum(GroupPercent^2), Words = AllWords[1]), by = c("year,group")]
+  data <- topicstoagencies[, list(HHI = sum(GroupPercent^2, na.rm = T), Words = AllWords[1]), by = c("year,group")]
 
 
   
   m <- match(company_year_topic.melt$variable, groups$TopicNumber)
   company_year_topic.melt$group <- groups[[which(colnames(groups) == gr.col)]][m]
   
-  company_year_group.melt <- company_year_topic.melt[, list(value = sum(value), 
-                                                            fedreg_group_words = sum(fedreg_topic_words)), 
+  company_year_group.melt <- company_year_topic.melt[, list(value = sum(value, na.rm = T)), 
                                                      by = "cik,year,group"] 
   
   m <- match(paste(company_year_group.melt$year, company_year_group.melt$group),
              paste(data$year,data$group))
 
   company_year_group.melt$HHI <- data$HHI[m]
+  company_year_group.melt$fedreg_group_words <- data$Words[m]
   
   measures <- company_year_group.melt[, list(regul.disp = 1 - sum(value*HHI, na.rm = T),
                                              regul.complex.log = sum(value*log(fedreg_group_words), na.rm = T)), by = "cik,year"]
