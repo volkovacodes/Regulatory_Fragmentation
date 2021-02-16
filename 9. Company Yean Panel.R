@@ -241,9 +241,7 @@ data <- getdata("topicagencyyear_Rule.csv")
 company_year_topic.melt$hhi_topic_agency_Rule <- data$HHI
 company_year_topic.melt$fedreg_topic_words_Rule <- data$Words
 
-x <- company_year_topic.melt %>% select("hhi_topic_agency", "hhi_topic_agency_Notice", 
-                                        "hhi_topic_agency_PRule", "hhi_topic_agency_Rule")
-View(cor(x, use = "complete.obs"))
+
 
 measures <- company_year_topic.melt[, list(regul.disp = 1 - sum(value*hhi_topic_agency),
                                            #regul.disp2 = 1 - sum(value^2*hhi_topic_agency),
@@ -271,6 +269,76 @@ measures <- measures[m] %>% select("regul.disp", "regul.complex", "regul.complex
 companyyear <- companyyear %>%
   cbind(measures)
 
+
+
+##################################################################
+###################### Adding Groups #############################
+##################################################################
+require(xlsx)
+
+groups <- read.xlsx2("/Users/evolkova/Dropbox/Projects/Govt Agenda/Sandbox/20210128/topic_labels_ML.xlsx", 1) %>%
+  as.data.table
+groups[, TopicNumber := paste0("Topic", Topic)]
+
+
+
+group_measures <- function(gr.col)
+{
+  
+  ### first we find a group column
+  group.col <- which(colnames(groups) == gr.col)
+  
+  
+  ### then we re-estimate topic HHI
+  topicstoagencies <- data_path %>%
+    paste0("topicagencyyear.csv") %>%
+    fread
+  
+  m <- match(topicstoagencies$TopicNumber, groups$Topic)
+  topicstoagencies$group <- groups[[group.col]][m]
+  topicstoagencies <- topicstoagencies[, list(GroupWords = sum(TopicWords)), by = "group,year,agency"]
+  topicstoagencies[, AllWords := sum(GroupWords), by = "group,year"]
+  topicstoagencies[, GroupPercent := GroupWords/AllWords]
+  
+  data <- topicstoagencies[, list(HHI = sum(GroupPercent^2), Words = AllWords[1]), by = c("year,group")]
+
+
+  
+  m <- match(company_year_topic.melt$variable, groups$TopicNumber)
+  company_year_topic.melt$group <- groups[[which(colnames(groups) == gr.col)]][m]
+  
+  company_year_group.melt <- company_year_topic.melt[, list(value = sum(value), 
+                                                            fedreg_group_words = sum(fedreg_topic_words)), 
+                                                     by = "cik,year,group"] 
+  
+  m <- match(paste(company_year_group.melt$year, company_year_group.melt$group),
+             paste(data$year,data$group))
+
+  company_year_group.melt$HHI <- data$HHI[m]
+  
+  measures <- company_year_group.melt[, list(regul.disp = 1 - sum(value*HHI, na.rm = T),
+                                             regul.complex.log = sum(value*log(fedreg_group_words), na.rm = T)), by = "cik,year"]
+  ### return properly matched data
+  
+  m <- match(paste(companyyear$cik, companyyear$year), 
+             paste(measures$cik, measures$year))
+  
+  return(measures[m])
+}
+
+### Michelle groups1
+measures <- "Group_ML1" %>%
+  group_measures
+
+companyyear$regul.disp.group.ML1 <- measures$regul.disp
+companyyear$regul.complex.log.group.ML1 <- measures$regul.complex.log
+
+### Michelle groups2
+measures <- "Group_ML2" %>%
+  group_measures
+
+companyyear$regul.disp.group.ML2 <- measures$regul.disp
+companyyear$regul.complex.log.group.ML2 <- measures$regul.complex.log
 
 fwrite(companyyear, paste0(outpath,"companyyear.csv"))
 saveRDS(companyyear, paste0(outpath,"companyyear.rds"))
