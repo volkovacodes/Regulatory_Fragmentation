@@ -117,6 +117,7 @@ comp[is.na(xrd), xrd := 0]
 ### capx_at
 comp[, capx_at := capx/at]
 comp[, inv_at := (capx + xrd)/at]
+comp[, rd_at := (xrd)/at]
 
 ### tobin's q
 comp[, tobin := (at - ceq + size/10^3)/at]
@@ -159,6 +160,7 @@ companyyear$lead.emp_sale <- comp$emp_sale[m]
 companyyear$lead.emp_at <- comp$emp_at[m]
 companyyear$lead.capx_at <- comp$capx_at[m]
 companyyear$lead.inv_at <- comp$inv_at[m]
+companyyear$lead.rd_at <- comp$rd_at[m]
 companyyear$lead.leverage <- comp$leverage[m]
 companyyear$lead.roa <- comp$roa[m]
 companyyear$lead.growth <- comp$growth[m]
@@ -272,6 +274,81 @@ companyyear <- companyyear %>%
   cbind(measures)
 
 
+<<<<<<< Updated upstream
 fwrite(companyyear, paste0(outpath,"companyyear.csv"))
 saveRDS(companyyear, paste0(outpath,"companyyear.rds"))
+=======
+
+##################################################################
+###################### Adding Groups #############################
+##################################################################
+require(xlsx)
+
+groups <- read.xlsx2("/Users/evolkova/Dropbox/Projects/Govt Agenda/Sandbox/20210128/topic_labels_ML_KV_JK.xlsx", 1) %>%
+  as.data.table
+groups[, TopicNumber := paste0("Topic", Topic)]
+
+
+
+group_measures <- function(gr.col)
+{
+  
+  ### first we find a group column
+  group.col <- which(colnames(groups) == gr.col)
+  
+  
+  ### then we re-estimate topic HHI
+  topicstoagencies <- data_path %>%
+    paste0("topicagencyyear.csv") %>%
+    fread
+  
+  m <- match(topicstoagencies$TopicNumber, groups$Topic)
+  topicstoagencies$group <- groups[[group.col]][m]
+  topicstoagencies <- topicstoagencies[, list(GroupWords = sum(TopicWords, na.rm = T)), by = "group,year,agency"]
+  topicstoagencies[, AllWords := sum(GroupWords, na.rm = T), by = "group,year"]
+  topicstoagencies[, GroupPercent := GroupWords/AllWords]
+  
+  data <- topicstoagencies[, list(HHI = sum(GroupPercent^2, na.rm = T), Words = AllWords[1]), by = c("year,group")]
+
+
+  
+  m <- match(company_year_topic.melt$variable, groups$TopicNumber)
+  company_year_topic.melt$group <- groups[[which(colnames(groups) == gr.col)]][m]
+  
+  company_year_group.melt <- company_year_topic.melt[, list(value = sum(value, na.rm = T)), 
+                                                     by = "cik,year,group"] 
+  
+  m <- match(paste(company_year_group.melt$year, company_year_group.melt$group),
+             paste(data$year,data$group))
+
+  company_year_group.melt$HHI <- data$HHI[m]
+  company_year_group.melt$fedreg_group_words <- data$Words[m]
+  
+  measures <- company_year_group.melt[, list(regul.disp = 1 - sum(value*HHI, na.rm = T),
+                                             regul.complex.log = sum(value*log(fedreg_group_words), na.rm = T)), by = "cik,year"]
+  ### return properly matched data
+  
+  m <- match(paste(companyyear$cik, companyyear$year), 
+             paste(measures$cik, measures$year))
+  
+  return(measures[m])
+}
+
+### my groups
+measures <- "Group_KV" %>%
+  group_measures
+
+companyyear$regul.disp.group.KV <- measures$regul.disp
+companyyear$regul.complex.log.group.KV <- measures$regul.complex.log
+
+### Joseph groups2
+measures <- "Group_JK2" %>%
+  group_measures
+
+companyyear$regul.disp.group.JK <- measures$regul.disp
+companyyear$regul.complex.log.group.JK <- measures$regul.complex.log
+
+fwrite(companyyear, paste0(data_path,"companyyear.csv"))
+saveRDS(companyyear, paste0(data_path,"companyyear.rds"))
+>>>>>>> Stashed changes
 
