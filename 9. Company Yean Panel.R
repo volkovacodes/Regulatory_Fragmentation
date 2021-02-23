@@ -193,7 +193,18 @@ m <- match(companyyear$sic, ffmap$SIC0)
 companyyear$FF12 <- ffmap$FF_12[m]
 companyyear$FF48 <- ffmap$FF_48[m]
 
+##################################################################################
+###################### ADD Productivity ##########################################
+##################################################################################
 
+tfp <- "/Users/evolkova/Dropbox/Projects/Govt Agenda/Data/TFPData_updated_ImrohorogluTuzel.csv"  %>%
+  fread
+
+m <- match(paste(companyyear$GVKEY, companyyear$year), paste(tfp$gvkey, tfp$fyear))
+companyyear$tfp <- tfp$TFP[m]
+
+m <- match(paste(companyyear$GVKEY, companyyear$year + 1), paste(tfp$gvkey, tfp$fyear))
+companyyear$lead.tfp <- tfp$TFP[m]
 ##################################################################################
 ################# ADD HHI and Other Measures #####################################
 ##################################################################################
@@ -273,12 +284,6 @@ measures <- measures[m] %>% select("regul.disp", "regul.complex", "regul.complex
 companyyear <- companyyear %>%
   cbind(measures)
 
-
-<<<<<<< Updated upstream
-fwrite(companyyear, paste0(outpath,"companyyear.csv"))
-saveRDS(companyyear, paste0(outpath,"companyyear.rds"))
-=======
-
 ##################################################################
 ###################### Adding Groups #############################
 ##################################################################
@@ -350,5 +355,5 @@ companyyear$regul.complex.log.group.JK <- measures$regul.complex.log
 
 fwrite(companyyear, paste0(data_path,"companyyear.csv"))
 saveRDS(companyyear, paste0(data_path,"companyyear.rds"))
->>>>>>> Stashed changes
+
 
