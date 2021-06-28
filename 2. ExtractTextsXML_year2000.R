@@ -7,20 +7,10 @@ require(lubridate)
 fedreg.master <- "/Users/evolkova/Dropbox/Projects/Govt Agenda/Data/Raw Data/masterfile_fedreg.csv" %>%
   fread
 
-correction <- function(x) {
-  if (length(x) > 0) {
-    return(x)
-  }
-  if (length(x) == 0) {
-    return(NA)
-  }
-}
-
-get_node <- function(nd, nodetype) {
-  nd %>%
-    html_nodes(nodetype) %>%
-    html_text()
-  
+correction <- function(x)
+{
+  if(length(x) > 0) return(x)
+  if(length(x) == 0) return(NA)
 }
 
 ### cleaning html files
@@ -67,7 +57,6 @@ for(yr in 1999:1995)
   
   m <- match(year.masterfile$document_number, add.data$DOCUMENTNUMBER)
   year.masterfile$TYPE <- ""
-  year.masterfile$rin <- ""
   year.masterfile$texts <- add.data$HTMLTEXT[m]
   year.masterfile[, ind := 1:.N]
   year.masterfile[,texts := clean.earlier.files(texts), by = ind]
@@ -85,7 +74,7 @@ folder <- "/Users/evolkova/Dropbox/Projects/Govt Agenda/Data/Raw Data/BulkFedReg
 daily.files <- list.files(folder,pattern = "xml$", recursive = TRUE)
 
 
-types <- c("rule", "prorule", "notice", "presdocu")#, "correct")
+types <- c("rule", "prorule", "notice", "presdocu", "correct")
 
 
 for(yr in 2000)
@@ -107,13 +96,10 @@ for(yr in 2000)
     for(TYPE in types)
     {
       split.docs <- html_nodes(one.day, TYPE)
-      frtext <- lapply(split.docs, html_text) %>%
+      frtext <- lapply(split.docs, html_text) %>% 
         sapply(., correction)
       
-      frdocs <- lapply(split.docs, get_node, nodetype = "frdoc") %>%
-        sapply(., correction)
-      
-      rin <- lapply(split.docs, get_node, nodetype = "rin") %>%
+      frdocs <- lapply(split.docs, function(nd) nd %>% html_nodes("frdoc") %>% html_text) %>% 
         sapply(., correction)
       
       
@@ -124,7 +110,7 @@ for(yr in 2000)
         next
       }
       
-      res <- try(tmp <- data.table(document_number = frdocs, text = frtext, rin = unlist(rin)))
+      res <- try(tmp <- data.table(document_number = frdocs, text = frtext))
       if(class(res)[1] == "try-error") next
       tmp$type <- TYPE
       texts <- rbind(texts, tmp)
@@ -137,7 +123,6 @@ for(yr in 2000)
   
   m <- match(year.masterfile$document_number, texts$docs)
   year.masterfile$texts <- texts$text[m]
-  year.masterfile$rin <- texts$rin[m]
   year.masterfile$TYPE <- texts$type[m]
 }
 
@@ -150,7 +135,6 @@ add.data <- dbGetQuery(con, 'SELECT * FROM docs')
 ind <- which(is.na(year.masterfile$texts))
 m <- match(year.masterfile[ind]$document_number, add.data$DOCUMENTNUMBER)
 year.masterfile[ind]$TYPE <- ""
-year.masterfile[ind]$rin <- ""
 year.masterfile[ind]$texts <- add.data$HTMLTEXT[m]
 year.masterfile[ind, texts := clean.earlier.files(texts), by = document_number]
 
