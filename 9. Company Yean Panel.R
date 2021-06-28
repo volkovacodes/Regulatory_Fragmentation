@@ -116,11 +116,8 @@ comp[is.na(xrd), xrd := 0]
 
 ### capx_at
 comp[, capx_at := capx/at]
-comp[is.na(capx_at), capx_at := 0]
 comp[, inv_at := (capx + xrd)/at]
-comp[is.na(inv_at), inv_at := 0]
 comp[, rd_at := (xrd)/at]
-comp[is.na(rd_at), rd_at := 0]
 
 ### tobin's q
 comp[, tobin := (at - ceq + size/10^3)/at]
@@ -143,7 +140,7 @@ comp[, cash := che]
 comp[, lag.at := shift(at, 1, type = "lag"), by = "GVKEY"]
 comp[, growth.at := 100*(at/lag.at - 1)]
 
-vars <- c("fyear","sale", "growth", "MB", "ppe_at", "ebitda_at", "sga", "sga_at" ,"emp_sale","emp_at" ,"xrd", 
+vars <- c("sale", "growth", "MB", "ppe_at", "ebitda_at", "sga", "sga_at" ,"emp_sale","emp_at" ,"xrd", 
           "capx_at", "inv_at", "fcf", "tobin", "leverage", "roa", "cash" ,"cash_at", "growth.at")
 
 ##################################################################################
@@ -200,7 +197,7 @@ companyyear$FF48 <- ffmap$FF_48[m]
 ###################### ADD Productivity ##########################################
 ##################################################################################
 
-tfp <- "/Users/evolkova/Dropbox/Projects/Govt Agenda/Data/TFPData_updated.csv"  %>%
+tfp <- "/Users/evolkova/Dropbox/Projects/Govt Agenda/Data/TFPData_updated_ImrohorogluTuzel.csv"  %>%
   fread
 
 m <- match(paste(companyyear$GVKEY, companyyear$year), paste(tfp$gvkey, tfp$fyear))
@@ -292,8 +289,8 @@ companyyear <- companyyear %>%
 ##################################################################
 require(xlsx)
 
-groups <- "/Users/evolkova/Dropbox/Projects/Govt Agenda/Sandbox/20210128/topic_labels_ML_KV_JK.csv" %>%
-  fread
+groups <- read.xlsx2("/Users/evolkova/Dropbox/Projects/Govt Agenda/Sandbox/20210128/topic_labels_ML_KV_JK.xlsx", 1) %>%
+  as.data.table
 groups[, TopicNumber := paste0("Topic", Topic)]
 
 
