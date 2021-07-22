@@ -16,7 +16,7 @@ dwnld.files <- function(i) {
   return(url[1])
 }
 
-for(yr in 1995:2005){
+for(yr in 1998:2004){
   
   year.masterfile <- yr %>%
     paste0("/Users/evolkova/Dropbox/Projects/Govt Agenda/Data/Master and Texts/", ., ".rds") %>%
