@@ -3,14 +3,16 @@ title: "Tables and Figures"
 author: "Kalmenovitz, Lowry, Volkova"
 date: "2020-07-20"
 output:
+  html_document:
+    df_print: paged
+    toc: yes
+    toc_float: yes
   word_document:
     fig_caption: yes
     fig_height: 3.65
     fig_width: 7.5
     keep_md: yes
     reference_docx: /Users/evolkova/Dropbox/style_reference.docx
-  html_document:
-    df_print: paged
 fontsize: 10pt
 ---
 
@@ -348,7 +350,19 @@ reg_out <- function(y) {
 "lead.capx_at ~ " |> reg_out()
 ```
 
+**Table 11 Lobby next year**
 
+Dependent variable: log of (1 + lobby expenses next year). 
+
+* Average of lobby expenses next year = `r format(mean(companyyear$lead.lobby, na.rm = T), nsmall = 0)` dollars
+
+* Average of log 1 + lobby expenses next year = `r format(mean(companyyear$lead.log_lobby, na.rm = T), nsmall = 0)` dollars
+
+* standard deviation of log 1 + lobby expenses next year = `r format(sd(companyyear$lead.log_lobby, na.rm = T), nsmall = 0)` dollars
+
+```{r lobby_atreg}
+"lead.log_lobby ~ " |> reg_out()
+```
 
 # Robustness
 
@@ -439,6 +453,7 @@ group.regs <- function(yvar){
 
 "lead.sga_at" %>% group.regs 
 ```
+
 
 *lead.tfp*
 

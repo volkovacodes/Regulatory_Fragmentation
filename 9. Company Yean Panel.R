@@ -375,5 +375,39 @@ measures <- "Group_JK2" %>%
 companyyear$regul.disp.group.JK <- measures$regul.disp
 companyyear$regul.complex.log.group.JK <- measures$regul.complex.log
 
+
+##################################################################
+###################### Lead lobby ################################
+##################################################################
+
+lobby <- readRDS("/Users/evolkova/Dropbox/Projects/Govt Agenda/Sandbox/20210406/lobby.rds")
+
+get_lobby <- function(m, names){
+  companyyear$x <- lobby$amount[m] 
+  companyyear[, lobbied := max(!is.na(x)), by = GVKEY]
+  companyyear[, min_year := max(year)]
+  companyyear[lobbied == 1, min_year := min(year[!is.na(x)]), by = GVKEY]
+  companyyear[lobbied == 1 & year >= min_year & is.na(x), x := 0]
+  
+  companyyear[, logx := log(1 + x) %>% win]
+  companyyear[, x_sale := x/(10^6*sale) %>% win]
+  companyyear[, x_at := x/(10^6*at) %>% win]
+  companyyear[, x := x %>% win]
+  
+  out <- companyyear %>% select("x", "logx")
+  colnames(out) <- names
+  return(out)
+}
+m <- match(paste(companyyear$GVKEY, companyyear$year + 1), paste(lobby$gvkey, lobby$report_year))
+companyyear <- companyyear %>%
+  cbind(get_lobby(m, c("lead.lobby", "lead.log_lobby")))
+
+m <- match(paste(companyyear$GVKEY, companyyear$year), paste(lobby$gvkey, lobby$report_year))
+companyyear <- companyyear %>%
+  cbind(get_lobby(m, c("lobby", "log_lobby")))
+##################################################################
+###################### Write results  ############################
+##################################################################
+
 fwrite(companyyear, paste0(data_path, "companyyear.csv"))
 saveRDS(companyyear, paste0(data_path, "companyyear.rds"))
