@@ -1,3 +1,4 @@
+### sup code: /Users/evolkova/Dropbox/Projects/Govt Agenda/Code/Gov_Agenda/Misc/AgencytoTopic.R
 require(data.table)
 require(lubridate)
 require(dplyr)
@@ -16,11 +17,10 @@ outpath <- "/Users/evolkova/Dropbox/Projects/Govt Agenda/Sandbox/20201029/temp_f
 ##################################################################################
 
 companyyear <- NULL
-for (yr in 1994:2019)
-{
+for (yr in 1994:2019) {
   master <- NULL
-  for (i in 1:4)
-  {
+  
+  for (i in 1:4) {
     master <- master %>%
       rbind(fread(paste0("/Users/evolkova/Dropbox/SEC Filings/10-K/Master with Compustat/master_", yr, i, ".csv")))
   }
@@ -210,6 +210,7 @@ companyyear$tfp <- tfp$TFP[m]
 
 m <- match(paste(companyyear$GVKEY, companyyear$year + 1), paste(tfp$gvkey, tfp$fyear))
 companyyear$lead.tfp <- tfp$TFP[m]
+
 ##################################################################################
 ################# ADD HHI and Other Measures #####################################
 ##################################################################################
@@ -242,35 +243,47 @@ getdata <- function(filename) {
   return(data[m])
 }
 
-### one
+
+### all documents
 data <- getdata("topicagencyyear.csv")
 company_year_topic.melt$hhi_topic_agency <- data$HHI
 company_year_topic.melt$fedreg_topic_words <- data$Words
 
-### two
+### notices
 data <- getdata("topicagencyyear_Notice.csv")
 company_year_topic.melt$hhi_topic_agency_Notice <- data$HHI
 company_year_topic.melt$fedreg_topic_words_Notice <- data$Words
 
-### three
+### proposed rules
 data <- getdata("topicagencyyear_Proposed Rule.csv")
 company_year_topic.melt$hhi_topic_agency_PRule <- data$HHI
 company_year_topic.melt$fedreg_topic_words_PRule <- data$Words
 
-### four
+### rules
 data <- getdata("topicagencyyear_Rule.csv")
 company_year_topic.melt$hhi_topic_agency_Rule <- data$HHI
 company_year_topic.melt$fedreg_topic_words_Rule <- data$Words
 
+### rules & new RIN
+data <- getdata("topicagencyyear_RIN.csv")
+company_year_topic.melt$hhi_topic_agency_RIN <- data$HHI
+company_year_topic.melt$fedreg_topic_words_RIN <- data$Words
+
+### rules & old RIN
+data <- getdata("topicagencyyear_old_RIN.csv")
+company_year_topic.melt$hhi_topic_agency_old_RIN <- data$HHI
+company_year_topic.melt$fedreg_topic_words_old_RIN <- data$Words
+
+
 x <- company_year_topic.melt %>% select(
   "hhi_topic_agency", "hhi_topic_agency_Notice",
-  "hhi_topic_agency_PRule", "hhi_topic_agency_Rule"
+  "hhi_topic_agency_PRule", "hhi_topic_agency_Rule", 
+  "hhi_topic_agency_RIN", "hhi_topic_agency_old_RIN"
 )
-View(cor(x, use = "complete.obs"))
+
 
 measures <- company_year_topic.melt[, list(
   regul.disp = 1 - sum(value * hhi_topic_agency),
-  # regul.disp2 = 1 - sum(value^2*hhi_topic_agency),
   regul.complex = sum(value * fedreg_topic_words),
   regul.complex.log = sum(value * log(fedreg_topic_words)),
   regul.disp_Notice = 1 - sum(value * hhi_topic_agency_Notice),
@@ -281,7 +294,13 @@ measures <- company_year_topic.melt[, list(
   regul.complex_PRule.log = sum(value * log(fedreg_topic_words_PRule)),
   regul.disp_Rule = 1 - sum(value * hhi_topic_agency_Rule),
   regul.complex_Rule = sum(value * fedreg_topic_words_Rule),
-  regul.complex_Rule.log = sum(value * log(fedreg_topic_words_Rule))
+  regul.complex_Rule.log = sum(value * log(fedreg_topic_words_Rule)),
+  regul.disp_RIN = 1 - sum(value * hhi_topic_agency_RIN),
+  regul.complex_RIN= sum(value * fedreg_topic_words_RIN),
+  regul.complex_RIN.log = sum(value * log(fedreg_topic_words_RIN)),
+  regul.disp_old_RIN = 1 - sum(value * hhi_topic_agency_old_RIN),
+  regul.complex_old_RIN= sum(value * fedreg_topic_words_old_RIN),
+  regul.complex_old_RIN.log = sum(value * log(fedreg_topic_words_old_RIN))
 ), by = "cik,year"]
 
 
@@ -294,11 +313,14 @@ measures <- measures[m] %>% select(
   "regul.disp", "regul.complex", "regul.complex.log",
   "regul.disp_Notice", "regul.complex_Notice", "regul.complex_Notice.log",
   "regul.disp_PRule", "regul.complex_PRule", "regul.complex_PRule.log",
-  "regul.disp_Rule", "regul.complex_Rule", "regul.complex_Rule.log"
+  "regul.disp_Rule", "regul.complex_Rule", "regul.complex_Rule.log",
+  "regul.disp_RIN", "regul.complex_RIN", "regul.complex_RIN.log",
+  "regul.disp_old_RIN", "regul.complex_old_RIN", "regul.complex_old_RIN.log"
 )
 
 companyyear <- companyyear %>%
   cbind(measures)
+
 
 ##################################################################
 ###################### Adding Groups #############################
@@ -383,6 +405,14 @@ companyyear$regul.complex.log.group.JK <- measures$regul.complex.log
 lobby <- readRDS("/Users/evolkova/Dropbox/Projects/Govt Agenda/Sandbox/20210406/lobby.rds")
 
 get_lobby <- function(m, names){
+  win <- function(x, eps = 0.005){
+    up <- quantile(x, na.rm = T, 1 - eps)
+    down <- quantile(x, na.rm = T, eps)
+    x[x>up] <- up
+    x[x<down] <- down
+    return(x)
+  }
+  
   companyyear$x <- lobby$amount[m] 
   companyyear[, lobbied := max(!is.na(x)), by = GVKEY]
   companyyear[, min_year := max(year)]
@@ -405,6 +435,8 @@ companyyear <- companyyear %>%
 m <- match(paste(companyyear$GVKEY, companyyear$year), paste(lobby$gvkey, lobby$report_year))
 companyyear <- companyyear %>%
   cbind(get_lobby(m, c("lobby", "log_lobby")))
+
+
 ##################################################################
 ###################### Write results  ############################
 ##################################################################

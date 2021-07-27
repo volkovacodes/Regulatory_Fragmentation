@@ -7,11 +7,10 @@ output:
     df_print: paged
     toc: yes
     toc_float: yes
-  word_document:
+  word_document: 
     fig_caption: yes
     fig_height: 3.65
     fig_width: 7.5
-    keep_md: yes
     reference_docx: /Users/evolkova/Dropbox/style_reference.docx
 fontsize: 10pt
 ---
@@ -282,10 +281,10 @@ kable(out)
 line <- NULL
 companyyear[, FF48_year := paste(FF48, year)]
 
-mainx <- c(rep("regul.disp",2), rep("topic.disp + regul.disp",2))
+mainx <- c(rep("regul.disp",2), rep("topic.disp + regul.disp",3))
 #### fix here !!!
 controls <- controls_min
-fe <- rep(c("|FF48 + year", "|FF48 + year + cik"),2)
+fe <- c(rep(c("|FF48 + year", "|FF48 + year + cik"),2), "|FF48 + cik + FF48_year")
 
 y <- "lead.sga_at ~ "
 reg_out <- function(y) {
@@ -344,29 +343,10 @@ reg_out <- function(y) {
 
 \newpage 
 
-**Table 10 CAPEX_AT next year**
 
-```{r capx_atreg}
-"lead.capx_at ~ " |> reg_out()
-```
 
-**Table 11 Lobby next year**
 
-Dependent variable: log of (1 + lobby expenses next year). 
-
-* Average of lobby expenses next year = `r format(mean(companyyear$lead.lobby, na.rm = T), nsmall = 0)` dollars
-
-* Average of log 1 + lobby expenses next year = `r format(mean(companyyear$lead.log_lobby, na.rm = T), nsmall = 0)` dollars
-
-* standard deviation of log 1 + lobby expenses next year = `r format(sd(companyyear$lead.log_lobby, na.rm = T), nsmall = 0)` dollars
-
-```{r lobby_atreg}
-"lead.log_lobby ~ " |> reg_out()
-```
-
-# Robustness
-
-**Table (Robust1) Regulatory Dispersion across Notices, Proposed Rules, and Final Rules**
+**Table 10 Regulatory Dispersion across Notices, Proposed Rules, and Final Rules**
 
 Correlation matrix between four measures of regulation dispersion (across all documents, notices, proposed rules and rules)
 
@@ -386,8 +366,8 @@ kable(x)
 ```{r notices, results = "asis"}
 
 reg_type <- function(tp) {
-  yvars <- c("lead.sga_at", "lead.tfp", "lead.growth", "lead.growth.at", "lead.roa","lead.emp_at", "lead.capx_at")
-  end <- " ~ regul.disp_XXX + regul.complex_XXX.log + topic.disp + LogWords10K + ppe_at + ebitda_at + log_sale + tobin|FF48 + year + cik"
+  yvars <- c("lead.sga_at", "lead.tfp", "lead.growth", "lead.growth.at", "lead.roa","lead.emp_at")
+  end <- " ~ regul.disp_XXX + regul.complex_XXX.log + topic.disp + LogWords10K + ppe_at + ebitda_at + log_sale + tobin|FF48 + FF48_year + cik"
 
   line <- paste0(yvars, end)
   line <- gsub("XXX", tp, line)
@@ -416,7 +396,25 @@ reg_type("PRule")
 reg_type("Rule")
 ```
 
-**Table (Robust2). Aggregation topics in groups**
+
+**Table 11 Lobby next year**
+
+Dependent variable: log of (1 + lobby expenses next year). 
+
+* Average of lobby expenses next year = `r format(mean(companyyear$lead.lobby, na.rm = T), nsmall = 0)` dollars
+
+* Average of log 1 + lobby expenses next year = `r format(mean(companyyear$lead.log_lobby, na.rm = T), nsmall = 0)` dollars
+
+* standard deviation of log 1 + lobby expenses next year = `r format(sd(companyyear$lead.log_lobby, na.rm = T), nsmall = 0)` dollars
+
+```{r lobby_atreg}
+"lead.log_lobby ~ " |> reg_out()
+```
+
+
+
+
+**Table 12. Aggregation topics in groups**
 
 *lead.sga_at*
 
@@ -424,7 +422,7 @@ reg_type("Rule")
 group.regs <- function(yvar){
   reg <- NULL
   line1 <- paste0(yvar, " ~ regul.disp.gr + regul.complex.log.gr + topic.disp + LogWords10K + ppe_at + ebitda_at + log_sale + tobin|FF48 + year")
-  line2 <- paste0(yvar, " ~ regul.disp.gr + regul.complex.log.gr + topic.disp + LogWords10K + ppe_at + ebitda_at + log_sale + tobin|FF48 + year + cik")
+  line2 <- paste0(yvar, " ~ regul.disp.gr + regul.complex.log.gr + topic.disp + LogWords10K + ppe_at + ebitda_at + log_sale + tobin|FF48 + FF48_year + cik")
   
   companyyear$regul.disp.gr <- companyyear$regul.disp
   companyyear$regul.complex.log.gr <- companyyear$regul.complex.log
@@ -481,11 +479,6 @@ group.regs <- function(yvar){
 *lead.emp_at*
 ```{r robust2emp}
 "lead.emp_at" %>% group.regs 
-```
-
-*lead.capx_at*
-```{r robust2capx}
-"lead.capx_at" %>% group.regs
 ```
 
 \newpage 
