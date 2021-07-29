@@ -387,15 +387,15 @@ group_measures <- function(gr.col) {
 measures <- "Group_KV" %>%
   group_measures()
 
-companyyear$regul.disp.group.KV <- measures$regul.disp
-companyyear$regul.complex.log.group.KV <- measures$regul.complex.log
+companyyear$regul.disp_group.KV <- measures$regul.disp
+companyyear$regul.complex_group.KV.log <- measures$regul.complex.log
 
 ### Joseph groups2
 measures <- "Group_JK2" %>%
   group_measures()
 
-companyyear$regul.disp.group.JK <- measures$regul.disp
-companyyear$regul.complex.log.group.JK <- measures$regul.complex.log
+companyyear$regul.disp_group.JK <- measures$regul.disp
+companyyear$regul.complex_group.JK.log <- measures$regul.complex.log
 
 
 ##################################################################
@@ -424,17 +424,17 @@ get_lobby <- function(m, names){
   companyyear[, x_at := x/(10^6*at) %>% win]
   companyyear[, x := x %>% win]
   
-  out <- companyyear %>% select("x", "logx")
+  out <- companyyear %>% select("x", "logx", "x_sale")
   colnames(out) <- names
   return(out)
 }
 m <- match(paste(companyyear$GVKEY, companyyear$year + 1), paste(lobby$gvkey, lobby$report_year))
 companyyear <- companyyear %>%
-  cbind(get_lobby(m, c("lead.lobby", "lead.log_lobby")))
+  cbind(get_lobby(m, c("lead.lobby", "lead.log_lobby", "lead.lobby_sale")))
 
 m <- match(paste(companyyear$GVKEY, companyyear$year), paste(lobby$gvkey, lobby$report_year))
 companyyear <- companyyear %>%
-  cbind(get_lobby(m, c("lobby", "log_lobby")))
+  cbind(get_lobby(m, c("lobby", "log_lobby", "lobby_sale")))
 
 
 ##################################################################

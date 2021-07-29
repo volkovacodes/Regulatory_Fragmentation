@@ -41,8 +41,7 @@ temp_path <- path %>%
 data_path <- path %>%
   paste0("/Data/")
 
-th1 <- function()
-{
+th1 <- function() {
   theme(axis.line = element_line(size=rel(1), colour = "black"), 
         panel.grid.major = element_line(colour = "#d3d3d3"), 
         panel.grid.minor = element_blank(), 
@@ -56,16 +55,12 @@ th1 <- function()
     theme(plot.title = element_text(hjust = 0.5))
 }
 
-th <- function()
-{
+th <- function() {
   theme_minimal() + 
   theme(legend.position='bottom', text=element_text(family="Georgia")) +
   theme(legend.title = element_text(size = rel(0.75)), 
         legend.text = element_text(size = rel(0.75)))  
 }
-
-
-#yearagencytype <- readRDS(paste0(temp_path, "yearagencytype.rds"))
 
 
 topics.prob.all <- readRDS(paste0(temp_path, "topics.prob.rds"))
@@ -89,34 +84,34 @@ companyyear <- "companyyear.rds" %>%
   paste0(data_path,.) %>%
   readRDS
 
-
 wordcloudlist <- "wordcloudlist.rds" %>% 
   paste0(temp_path,.) %>%
   readRDS
 
-labels <- "/Users/evolkova/Dropbox/Projects/Govt Agenda/Sandbox/20210128/topic_labels_ML_KV_JK.csv" %>%
+labels <- "./Data/topic_labels_ML_KV_JK.csv" %>%
+  paste0(path,.) %>% 
   fread
 
 companyyear[, `:=`(log_sale = log(1 + sale), 
                    fcf_at = fcf/at,
                    LogWords10K = log(Words10K))]
 
-
-
 vars <- c("log_sale", "ppe_at", "ebitda_at", "sale",
           "growth", "tobin", 
           "regul.disp_Notice", "regul.complex_Notice", "regul.complex_Notice.log",  
           "regul.disp_PRule", "regul.complex_PRule", "regul.complex_PRule.log",  
-          "regul.disp_Rule", "regul.complex_Rule", "regul.complex_Rule.log",  
+          "regul.disp_Rule", "regul.complex_Rule", "regul.complex_Rule.log", 
+          "regul.disp_RIN", "regul.complex_RIN", "regul.complex_RIN.log", 
+          "regul.disp_old_RIN", "regul.complex_old_RIN", "regul.complex_old_RIN.log", 
           "regul.disp", "regul.complex", "regul.complex.log", 
           "regul.disp.group.JK", "regul.disp.group.KV", 
           "regul.complex.log.group.JK", "regul.complex.log.group.KV",
           "topic.disp", "LogWords10K",
           "lead.sga_at", "lead.capx_at", "lead.inv_at", "lead.emp_at", 
-          "lead.leverage", "lead.growth", "lead.roa", "lead.cash_at", "lead.growth.at") ## add or drop emp_sale
+          "lead.leverage", "lead.growth", "lead.roa", "lead.cash_at", "lead.growth.at") 
 
 controls_min <- " +  regul.complex.log + LogWords10K + ppe_at + ebitda_at + 
- log_sale + tobin" ## add or drop emp_sale
+ log_sale + tobin" 
 
 col <- which(colnames(companyyear) %in% vars)
 ind <- companyyear$sale > 0
@@ -125,12 +120,9 @@ for(c in col) {
   ind <- ind & !is.na(companyyear[[c]]) & !is.nan(companyyear[[c]]) & !is.infinite(companyyear[[c]])
 }
 
-
-
 companyyear <- companyyear[ind]
 companyyear[, lead.roa := 100*lead.roa]
 companyyear[, roa := 100*roa]
-
 
 win <- function(x, eps = 0.005){
   up <- quantile(x, na.rm = T, 1 - eps)
@@ -180,12 +172,223 @@ cm <- c("regul.disp" = "Regulation Dispersion",
     rbind(list("commodity futures trading commission", "CFTC")) %>%
     rbind(list("department of veteran affairs", "DVA"))
 
+  
+topicagencyyear <- "./Data/topicagencyyear.csv" %>% 
+  paste0(path,.) %>% 
+  fread()
+
+agencydisp <- topicagencyyear[,list(AgencyDisp = 1 - sum(AgencyPercent^2)),
+                              by = "TopicNumber,year"]
+  
+ff12labels <- "./Data/Indlabels12.txt" %>%
+  paste0(path,.) %>%
+  readLines
 setkey(mapagency, agency)
 
 ```
 
+# **Figure 1: Topic Clouds**
 
-**Table 3: Descriptive statistics**
+```{r topic3}
+make_cloud <- function(i) {
+  wordcloud(wordcloudlist[[i]]$term, wordcloudlist[[i]]$beta, colors = brewer.pal(8, "Dark2"), random.order = F) %>%
+    print
+}
+make_cloud(3) 
+```
+
+```{r topic5}
+make_cloud(5)
+```
+
+```{r topic21}
+make_cloud(21)
+```
+
+```{r topic23}
+make_cloud(23)
+```
+
+# **Figure 2: Histograms**
+
+*Panel A: Dispersion of agencies per topic*
+
+```{r fig3a, results = "asis", dpi = 300}
+
+data <- topicstoagencies[, list(disp = 1 - sum(AgencyPercent^2)), 
+                         by = c("year,TopicNumber")]
+
+bnd <- 0.01
+p <- ggplot(data = data, aes(disp)) +
+  geom_histogram(aes(y=bnd*..density..), fill="darkgreen",binwidth = bnd, color = "black") + theme_minimal() + 
+  xlab("Dispersion of agencies per topic") + ylab("Density [% of topic-year obs]") #+ 
+  #ggtitle("Dispersion of Agencies per Topic") + th()
+print(p)
+```
+
+*Panel B: Dispersion of Topics per firm-year*
+
+$$Topic\_Dispersion_{Firm,Year} = 1 - \sum_{Topic} P^2_{Firm,Topic,year}$$
+
+```{r fig3b, results = "asis", dpi = 300}
+bnd <- 0.0025
+p <- ggplot(data = companyyear, aes(topic.disp)) +
+  geom_histogram(aes(y=bnd*..density..),fill="steelblue", col = "darkblue", bins = 30) + 
+  theme_minimal() + xlab("Topic Dispersion in Firms") + 
+  ylab("Density [% of Firm-Year Obs]")
+
+print(p)
+```
+
+\newpage
+
+*Panel C: Dispersion of Agencies per Firm-year*
+
+$$RegulationDispersion_{firm,year} = 1- \sum_{Topic} \sum_{Agency}P_{Firm,Topic,year} \cdot \omega_{Topic,Agency,year}^2 = 1 - \sum_{Topic} P_{Firm,Topic,year} \cdot HHI_{Topic,Agency}$$
+
+```{r fig3c, results = "asis", dpi = 300}
+bnd <- 0.005
+p <- ggplot(data = companyyear[abs(regul.disp) < 1.1], aes(regul.disp)) +
+  geom_histogram(aes(y=bnd*..density..), fill="purple",binwidth = bnd, color = "purple4") +
+  theme_minimal() + 
+  xlab("Regulation Dispersion") + ylab("Density [% of firm-year obs]") 
+print(p)
+```
+
+\newpage
+
+# **Figure 3: Time Trend**
+
+## Panel A: 12 Industries
+
+```{r ff12, results = "asis"}
+
+library(randomcoloR)
+n <- 12
+pl <- distinctColorPalette(n)
+
+labs <- data.table(ind = 1:12, lab = ff12labels)
+
+
+companyyear$FF12_lab <- factor(labs[match(companyyear$FF12, labs$ind)]$lab, levels = ff12labels)
+
+companyyear[,mean(regul.disp),by = "FF12_lab,year"] |>
+  ggplot(aes(y = V1, x = year, col = FF12_lab, group = FF12_lab)) + 
+  geom_line() + theme_minimal() + 
+  theme(axis.line = element_line(size=rel(1), colour = "black"), 
+        panel.grid.major = element_line(colour = "#d3d3d3"), 
+        panel.grid.minor = element_blank(), 
+        panel.border = element_blank(), panel.background = element_blank(),
+        plot.title = element_text(size = rel(1.5), face = "bold"),
+        axis.text.x=element_text(colour="black", size = rel(1.3)),
+        axis.title.x = element_text(colour="black", size = rel(1.3)),
+        axis.title.y = element_text(colour="black", size = rel(1.3)),
+        axis.text.y=element_text(colour="black", size = rel(1.4))) +
+    theme(plot.title = element_text(hjust = 0.5)) + xlab("Year") + 
+    ylab("Regulatory Dispersion") + 
+    scale_color_manual(values =pl, name = "Industry") + 
+  ylim(0.72,0.88)
+
+
+```
+
+## Panel B: FF12 == 1
+
+```{r ff1, results = "asis"}
+
+pl <- distinctColorPalette(length(unique(companyyear[FF12 == 1]$cik)))
+
+companyyear[FF12 == 1] |>
+  ggplot(aes(y = regul.disp, x = year, col = as.character(cik), group = cik)) + 
+  geom_line(alpha = 0.5, size = 0.5) + theme_minimal() + 
+  theme(legend.position = "none") + 
+  theme(axis.line = element_line(size=rel(1), colour = "black"), 
+        panel.grid.major = element_line(colour = "#d3d3d3"), 
+        panel.grid.minor = element_blank(), 
+        panel.border = element_blank(), panel.background = element_blank(),
+        plot.title = element_text(size = rel(1.5), face = "bold"),
+        axis.text.x=element_text(colour="black", size = rel(1.3)),
+        axis.title.x = element_text(colour="black", size = rel(1.3)),
+        axis.title.y = element_text(colour="black", size = rel(1.3)),
+        axis.text.y=element_text(colour="black", size = rel(1.4))) +
+    theme(plot.title = element_text(hjust = 0.5)) + xlab("Year") + 
+    ylab("Regulatory Dispersion") + 
+    scale_color_manual(values = pl) + ylim(0.72,0.88)
+
+
+```
+
+# **Figure 4:** $\Delta$ Regulation Dispersion
+
+```{r changes}
+
+int1 <- 2014:2016
+int2 <- 2017:2019
+lab1 <- "#Words in 2014-2016"
+lab2 <- "#Words in 2017-2019"
+
+difgraph <- function(int1, int2, lab1, lab2, data) {
+  increases <- data[, list(regul1 = mean(AgencyDisp[year %in% int1]), 
+                           regul2 = mean(AgencyDisp[year %in% int2])), by = TopicNumber]
+
+  increases[, change := regul2 - regul1]
+  setkey(increases, change)
+  for(tp in as.numeric(1:100)) 
+    increases[TopicNumber == tp,label1 := labels$ShortLabel[match(tp, labels$Topic)]]
+  
+  increases[, label1 := paste0(TopicNumber, ".", label1)]
+  increases[, rank := 1:.N]
+  increases[, label1 := paste0(strsplit(as.character(label1), "(?<=.{15})", 
+                                        perl = TRUE)[[1]], collapse = "\n"), by = rank]
+  
+  increases <- increases[rank %in% c(1:3,98:100)]
+  layers <- increases$label[c(6:4,1:3)]
+  setkey(increases, rank)
+  increases <- increases %>%
+    select("TopicNumber", "label1", "regul1", "regul2", "rank") %>%
+    melt(id.vars = c("TopicNumber", "label1", "rank")) 
+
+  colnames(increases) <- c("topic", "label", "rank", "year", "reguldisp")
+
+  increases[rank %in% 1:3, type := "2. Decrease"]
+  increases[rank %in% 98:100, type := "1. Increase"]
+  increases[year == "regul1", year:= lab1]
+  increases[year == "regul2", year := lab2]
+
+  increases$label <- factor(increases$label, levels = layers)
+
+  plot <- increases %>%
+    ggplot(aes(x = label, y = reguldisp, fill = year)) +
+    geom_bar(stat = "identity", position = "dodge") + 
+    facet_wrap(~type, scales = "free_x") + 
+    th() + theme(axis.title.x=element_blank()) + 
+    guides(fill=guide_legend(title="Period")) +
+    #geom_text(aes(label = words.text, y = words), size = 2.5, 
+    #          position=position_dodge(width=0.9), vjust=-0.25) + 
+    scale_fill_brewer(palette = "Paired") + ylab("Agency Dispersion") 
+  
+  return(plot)
+}
+
+cat("*Panel B: Topics with biggest change around 2016 presidential election*")
+difgraph(2014:2016, 2017:2019, "2014-2016","2017-2019", data = agencydisp) %>% print
+```
+
+```{r}
+difgraph(2006:2008, 2009:2011, "2006-2008","2009-2011", data = agencydisp) %>% print
+```
+
+## Panel C: Agencies the biggest $\Delta$, Trump
+
+## Panel D: Agencies the biggest $\Delta$, GFC
+
+\newpage
+
+# **Table 1:**
+
+# **Table 2: Past and Future**
+
+# **Table 3: Descriptive statistics**
 
 ```{r descriptive}
 out <- NULL
@@ -233,7 +436,10 @@ out <- out %>% rbind(vec)
 vec <- c("Regulation Dispersion", sapply(ind, function(x) mr(companyyear[x]$regul.disp))) %>% as.list
 out <- out %>% rbind(vec) 
 
-vec <- c("Log(Sale)", sapply(ind, function(x) mr(companyyear[x]$log_sale))) %>% as.list
+vec <- c("Sale", sapply(ind, function(x) mr(companyyear[x]$sale))) %>% as.list
+out <- out %>% rbind(vec) 
+
+vec <- c("TFP", sapply(ind, function(x) mr(companyyear[x]$tfp))) %>% as.list
 out <- out %>% rbind(vec) 
 
 vec <- c("N segments", sapply(ind, function(x) mr(companyyear[x]$Nsegments))) %>% as.list
@@ -272,83 +478,50 @@ out <- out %>% rbind(vec)
 kable(out)
 ```
 
-
 \newpage
 
-**Table 4 SGA_AT next year**
+# **Table 4 SGA_AT, TFP, ROA next year**
 
-```{r sga_atreg}
+```{r sga_tfp_roa}
 line <- NULL
 companyyear[, FF48_year := paste(FF48, year)]
 
-mainx <- c(rep("regul.disp",2), rep("topic.disp + regul.disp",3))
-#### fix here !!!
-controls <- controls_min
-fe <- c(rep(c("|FF48 + year", "|FF48 + year + cik"),2), "|FF48 + cik + FF48_year")
 
-y <- "lead.sga_at ~ "
-reg_out <- function(y) {
+
+reg_out <- function(y, ncols = 3) {
+  
+  mainx <- rep(" ~ regul.disp + topic.disp", 2*ncols)
+  controls <- controls_min
+  fe <- c(rep("|FF48 + year + cik",ncols), rep("|FF48 + FF48_year + cik",ncols))
+
+
   line <- paste0(y, mainx, controls, fe)
   reg <- NULL
-  for(i in 1:length(line)) reg[[i]] <- feols(as.formula(line[i]), data = companyyear)
+  for(i in 1:length(line)) reg[[paste0(i, ".", y[i])]] <- feols(as.formula(line[i]), data = companyyear)
   x <- modelsummary(reg, coef_map = cm, stars = c('*' = .1, '**' = 0.05 ,'***' = .01),
                gof_omit = 'DF|Deviance|AIC|BIC|Log.Lik|R2 Within|R2 Pseudo',coef_omit = "(Intercept)")
   return(x)
 }
 
 
-"lead.sga_at ~ " |> reg_out()
+rep(c("lead.sga_at", "lead.tfp","lead.roa"), 2) |> reg_out()
 ```
 
 \newpage
 
-**Table 5 TFP next year**
+# **Table 5 Sales growth, assets growth, emp next year**
 
-```{r tfp_reg}
-
-"lead.tfp ~ " |> reg_out()
-
-```
-
-\newpage 
-**Table 6 Sales Growth next year**
-
-```{r salesgrowth_reg}
-"lead.growth  ~ "|> reg_out()
-```
-\newpage
-
-**Table 7 Assets Growth next year**
-
-```{r growth_reg}
-"lead.growth.at  ~ " |> reg_out()
+```{r growth_growthat_emp}
+rep(c("lead.growth", "lead.growth.at","lead.emp_at"), 2) |> reg_out()
 ```
 
 \newpage
 
-**Table 8 ROA next year**
-
-```{r roa_reg}
-"lead.roa ~ " |> reg_out()
-```
-
-\newpage
-
-**Table 9 EMP_AT next year**
-
-```{r emp_atreg}
-
-"lead.emp_at ~ " |> reg_out()
-```
-
-\newpage 
-
-
-
-
-**Table 10 Regulatory Dispersion across Notices, Proposed Rules, and Final Rules**
+# **Table 6 RD: Notices, Pr. Rules, Rules**
 
 Correlation matrix between four measures of regulation dispersion (across all documents, notices, proposed rules and rules)
+
+## Panel A *Correlations*
 
 *Notice are less correlation with rules and proposed rules. But other things are correlated.*
 
@@ -360,13 +533,14 @@ x <- companyyear %>%
 kable(x)
 ```
 
+\newpage
 
-*notices*
+## Panel B *Notices*
 
 ```{r notices, results = "asis"}
 
 reg_type <- function(tp) {
-  yvars <- c("lead.sga_at", "lead.tfp", "lead.growth", "lead.growth.at", "lead.roa","lead.emp_at")
+  yvars <- c("lead.sga_at", "lead.tfp", "lead.roa", "lead.growth", "lead.growth.at","lead.emp_at")
   end <- " ~ regul.disp_XXX + regul.complex_XXX.log + topic.disp + LogWords10K + ppe_at + ebitda_at + log_sale + tobin|FF48 + FF48_year + cik"
 
   line <- paste0(yvars, end)
@@ -386,110 +560,86 @@ reg_type <- function(tp) {
 reg_type("Notice")
 ```
 
-*pr rules*
+\newpage
+
+## Panel C *Pr Rules*
+
 ```{r prule, results = "asis"}
 reg_type("PRule")
 ```
 
-*rules* 
+## Panel D *Rules*
+
 ```{r rule, results = "asis"}
 reg_type("Rule")
 ```
 
+\newpage
 
-**Table 11 Lobby next year**
+# **Table 7 RD: New vs Old Rules**
 
-Dependent variable: log of (1 + lobby expenses next year). 
+Correlation matrix between four measures of regulation dispersion (across all documents, notices, proposed rules and rules)
 
-* Average of lobby expenses next year = `r format(mean(companyyear$lead.lobby, na.rm = T), nsmall = 0)` dollars
+## Panel A *Correlations*
 
-* Average of log 1 + lobby expenses next year = `r format(mean(companyyear$lead.log_lobby, na.rm = T), nsmall = 0)` dollars
+*Notice are less correlation with rules and proposed rules. But other things are correlated.*
 
-* standard deviation of log 1 + lobby expenses next year = `r format(sd(companyyear$lead.log_lobby, na.rm = T), nsmall = 0)` dollars
+```{r cors_rin, results = "asis", echo = F}
+x <- companyyear %>% 
+  select("regul.disp_Rule", "regul.disp_RIN", "regul.disp_old_RIN") %>%
+  cor
+
+kable(x)
+```
+
+## Panel B *RIN*
+
+```{r rin, results = "asis"}
+reg_type("RIN")
+```
+
+\newpage
+
+## Panel C *Old RIN*
+
+```{r old_rin, results = "asis"}
+reg_type("old_RIN")
+```
+
+# **Table 8 Lobby next year**
+
+Dependent variable: log of (1 + lobby expenses next year).
+
+-   Average of lobby expenses next year = `r format(mean(companyyear$lead.lobby, na.rm = T), nsmall = 0)` dollars
+
+-   Average of log 1 + lobby expenses next year = `r format(mean(companyyear$lead.log_lobby, na.rm = T), nsmall = 0)` dollars
+
+-   standard deviation of log 1 + lobby expenses next year = `r format(sd(companyyear$lead.log_lobby, na.rm = T), nsmall = 0)` dollars
 
 ```{r lobby_atreg}
-"lead.log_lobby ~ " |> reg_out()
+rep(c("lead.log_lobby", "I(lead.lobby/10^6)"), 2) %>%  reg_out(.,ncol = 2)
 ```
 
+# **Table 9.Topic Groups**
 
+## Panel A: 70 Topics
 
-
-**Table 12. Aggregation topics in groups**
-
-*lead.sga_at*
-
-```{r introgroups, results = "asis"}
-group.regs <- function(yvar){
-  reg <- NULL
-  line1 <- paste0(yvar, " ~ regul.disp.gr + regul.complex.log.gr + topic.disp + LogWords10K + ppe_at + ebitda_at + log_sale + tobin|FF48 + year")
-  line2 <- paste0(yvar, " ~ regul.disp.gr + regul.complex.log.gr + topic.disp + LogWords10K + ppe_at + ebitda_at + log_sale + tobin|FF48 + FF48_year + cik")
-  
-  companyyear$regul.disp.gr <- companyyear$regul.disp
-  companyyear$regul.complex.log.gr <- companyyear$regul.complex.log
-  
-  reg[["No Gr"]] <- feols(as.formula(line1), data = companyyear)
-  reg[["No Gr, FE"]] <- feols(as.formula(line2), data = companyyear)
-  
-  companyyear$regul.disp.gr <- companyyear$regul.disp.group.KV
-  companyyear$regul.complex.log.gr <- companyyear$regul.complex.log.group.KV
-  
-  reg[["KV Gr"]] <- feols(as.formula(line1), data = companyyear)
-  reg[["KV Gr, FE"]] <- feols(as.formula(line2), data = companyyear)
-  
-  companyyear$regul.disp.gr <- companyyear$regul.disp.group.JK
-  companyyear$regul.complex.log.gr <- companyyear$regul.complex.log.group.JK
-  
-  reg[["JK Gr"]] <- feols(as.formula(line1), data = companyyear)
-  reg[["Jk Gr, FE"]] <- feols(as.formula(line2), data = companyyear)
-  
-  omits <- "(Intercept)|topic|complex|Words|ppe|ebitda|sale|tobin"
-  x <- modelsummary(reg, stars = c('*' = .1, '**' = 0.05 ,'***' = .01), 
-                    gof_omit = 'DF|Deviance|AIC|BIC|Log.Lik|R2 Within|R2 Pseudo',coef_omit = omits)
-  return(x)
-}
-
-
-"lead.sga_at" %>% group.regs 
+```{r JK_groups, results = "asis"}
+reg_type("group.JK")
 ```
 
+## Panel B: 57 Topics
 
-*lead.tfp*
-
-```{r robust2tfp}
-"lead.tfp" %>% group.regs 
+```{r KV_groups, results = "asis"}
+reg_type("group.KV")
 ```
 
-*lead.growth*
+\newpage
 
-```{r robust2sales}
-"lead.growth" %>% group.regs
-```
-
-*lead.growth_at* 
-
-```{r robust2at}
-"lead.growth.at" %>% group.regs 
-```
-
-*lead.roa*
-```{r robust2roa}
-"lead.roa" %>% group.regs 
-```
-
-*lead.emp_at*
-```{r robust2emp}
-"lead.emp_at" %>% group.regs 
-```
-
-\newpage 
-
-#Appendix
-
-Figure A1. XXX here I would report trend in the number of documents
+\#Appendix
 
 Table A1. Full Agency Names
+
 ```{r}
 kable(mapagency)
 ```
-
-
