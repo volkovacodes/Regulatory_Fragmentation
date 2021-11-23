@@ -3,15 +3,15 @@ title: "Tables and Figures"
 author: "Kalmenovitz, Lowry, Volkova"
 date: "2020-07-20"
 output:
-  html_document:
-    df_print: paged
-    toc: yes
-    toc_float: yes
   word_document: 
     fig_caption: yes
     fig_height: 3.65
     fig_width: 7.5
     reference_docx: /Users/evolkova/Dropbox/style_reference.docx
+  html_document:
+    df_print: paged
+    toc: yes
+    toc_float: yes
 fontsize: 10pt
 ---
 
@@ -221,7 +221,7 @@ data <- topicstoagencies[, list(disp = 1 - sum(AgencyPercent^2)),
 bnd <- 0.01
 p <- ggplot(data = data, aes(disp)) +
   geom_histogram(aes(y=bnd*..density..), fill="darkgreen",binwidth = bnd, color = "black") + theme_minimal() + 
-  xlab("Dispersion of agencies per topic") + ylab("Density [% of topic-year obs]") #+ 
+  xlab("Dispersion of Topics Across Agencies") + ylab("Density [% of topic-year obs]") #+ 
   #ggtitle("Dispersion of Agencies per Topic") + th()
 print(p)
 ```
@@ -234,7 +234,7 @@ $$Topic\_Dispersion_{Firm,Year} = 1 - \sum_{Topic} P^2_{Firm,Topic,year}$$
 bnd <- 0.0025
 p <- ggplot(data = companyyear, aes(topic.disp)) +
   geom_histogram(aes(y=bnd*..density..),fill="steelblue", col = "darkblue", bins = 30) + 
-  theme_minimal() + xlab("Topic Dispersion in Firms") + 
+  theme_minimal() + xlab("Dispersion of Topics Within Each Firm-Year") + 
   ylab("Density [% of Firm-Year Obs]")
 
 print(p)
@@ -251,7 +251,7 @@ bnd <- 0.005
 p <- ggplot(data = companyyear[abs(regul.disp) < 1.1], aes(regul.disp)) +
   geom_histogram(aes(y=bnd*..density..), fill="purple",binwidth = bnd, color = "purple4") +
   theme_minimal() + 
-  xlab("Regulation Dispersion") + ylab("Density [% of firm-year obs]") 
+  xlab("Regulatory Fragmentation") + ylab("Density [% of firm-year obs]") 
 print(p)
 ```
 
@@ -285,7 +285,7 @@ companyyear[,mean(regul.disp),by = "FF12_lab,year"] |>
         axis.title.y = element_text(colour="black", size = rel(1.3)),
         axis.text.y=element_text(colour="black", size = rel(1.4))) +
     theme(plot.title = element_text(hjust = 0.5)) + xlab("Year") + 
-    ylab("Regulatory Dispersion") + 
+    ylab("Regulatory Fragmentation") + 
     scale_color_manual(values =pl, name = "Industry") + 
   ylim(0.72,0.88)
 
@@ -312,7 +312,7 @@ companyyear[FF12 == 1] |>
         axis.title.y = element_text(colour="black", size = rel(1.3)),
         axis.text.y=element_text(colour="black", size = rel(1.4))) +
     theme(plot.title = element_text(hjust = 0.5)) + xlab("Year") + 
-    ylab("Regulatory Dispersion") + 
+    ylab("Regulatory Fragmentation") + 
     scale_color_manual(values = pl) + ylim(0.72,0.88)
 
 
@@ -365,7 +365,7 @@ difgraph <- function(int1, int2, lab1, lab2, data) {
     guides(fill=guide_legend(title="Period")) +
     #geom_text(aes(label = words.text, y = words), size = 2.5, 
     #          position=position_dodge(width=0.9), vjust=-0.25) + 
-    scale_fill_brewer(palette = "Paired") + ylab("Agency Dispersion") 
+    scale_fill_brewer(palette = "Paired") + ylab("Dispersion Across Agencies") 
   
   return(plot)
 }
