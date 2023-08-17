@@ -1,0 +1,464 @@
+---
+title: "Online Appendix"
+author: "Kalmenovitz, Lowry, Volkova"
+date: "2023-07-14"
+output:
+  html_document:
+    df_print: paged
+    toc: yes
+    toc_float: yes
+  word_document: 
+    fig_caption: yes
+    fig_height: 3.65
+    fig_width: 7.5
+    reference_docx: /Users/evolkova/Dropbox/style_reference.docx
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+
+require(pacman)
+p_load(ggplot2, data.table, lubridate, ggthemes, dplyr, RColorBrewer, rmarkdown, knitr, modelsummary, fixest, flextable, psych, wordcloud, lfe, kableExtra, tidyverse)
+
+set_flextable_defaults(font.size = 10,
+                       font.family = "Times New Roman",
+                       hansi.family = "Times New Roman")
+
+options("modelsummary_stars_note" = FALSE)
+
+path <- "/Users/evolkova/Dropbox/Projects/Govt Agenda/"
+
+temp_path <- path %>%
+  paste0("Sandbox/20201029/temp_files/")
+
+data_path <- path %>%
+  paste0("/Data/")
+
+th1 <- function() {
+  theme(axis.line = element_line(size=rel(1), colour = "black"), 
+        panel.grid.major = element_line(colour = "#d3d3d3"), 
+        panel.grid.minor = element_blank(), 
+        panel.border = element_blank(), panel.background = element_blank(),
+        plot.title = element_text(size = rel(1.5), family = "Calibri", face = "bold"),
+        text=element_text(family="Calibri"), 
+        axis.text.x=element_text(colour="black", size = rel(1.3)),
+        axis.title.x = element_text(colour="black", size = rel(1.3)),
+        axis.title.y = element_text(colour="black", size = rel(1.3)),
+        axis.text.y=element_text(colour="black", size = rel(1.4))) +
+    theme(plot.title = element_text(hjust = 0.5))
+}
+
+th <- function() {
+  theme_minimal() + 
+  theme(legend.position='bottom', text=element_text(family="Georgia")) +
+  theme(legend.title = element_text(size = rel(0.75)), 
+        legend.text = element_text(size = rel(0.75)))  
+}
+
+win <- function(x, eps = 0.005){
+  up <- quantile(x, na.rm = T, 1 - eps)
+  down <- quantile(x, na.rm = T, eps)
+  x[x>up] <- up
+  x[x<down] <- down
+  return(x)
+}
+
+topics.prob.all <- readRDS(paste0(temp_path, "topics.prob.rds"))
+topics.prob <- topics.prob.all[!duplicated(document_number)]
+
+tmp <- topics.prob
+for(i in 1:100) tmp[[i]] <- tmp[[i]]*topics.prob$nwords
+
+topiccols <- c(1:100, "nwords")
+topics.prob.yeartype <- tmp[, lapply(.SD, . %>% sum), by = .(type,year), .SDcols = topiccols]
+topics.prob.year <- tmp[, lapply(.SD, . %>% sum), by = .(year), .SDcols = topiccols]
+
+
+### load topic to agency
+topicstoagencies <- temp_path %>%
+  paste0("topicagencyyear.csv") %>%
+  fread
+
+
+
+wordcloudlist <- "wordcloudlist.rds" %>% 
+  paste0(temp_path,.) %>%
+  readRDS
+
+labels <- "./Data/topic_labels_ML_KV_JK.csv" %>%
+  paste0(path,.) %>% 
+  fread
+
+source("/Users/evolkova/Dropbox/Projects/Govt Agenda/Sandbox/main_functions.R")
+companyyear <- prep_cy("/Users/evolkova/Dropbox/Projects/Govt Agenda/Data/")
+
+  
+### here we correct coefficients names
+cm <- c("regul.disp_norm" = "Regulation Dispersion",
+        "topic.disp_norm" = "Topic Dispersion",
+        "regul.complex.log_norm" = "Regulation Complexity",
+        "LogWords10K_norm" = "Log(Word,10K)",
+        "Nsegments_norm" = "Nsegments",
+        "ppe_at_norm" = "PPE/AT",
+        "ebitda_at_norm" = "EBITDA/AT", 
+        "emp_sale_norm" = "Emp/Sale",
+        "log_sale_norm" = "Log(Sale)",
+        "log_at_norm" = "log(AT)",
+        "growth_norm" = "Sales Growth",
+        "tobin_norm" = "Tobin's Q",
+        "fcf_at_norm" = "FCF to AT",
+        "(Intercept)" = "(Intercept)")
+
+### here we correct the names
+mapagency <- data.table(agency = "environmental protection agency", label = "EPA") %>%
+    rbind(list("department of health and human services", "DHHS")) %>%
+    rbind(list("department of transportation", "Transportation")) %>%
+    rbind(list("department of commerce","Commerce")) %>%
+    rbind(list("securities and exchange commission", "SEC")) %>%
+    rbind(list("department of interior", "DOI")) %>%
+    rbind(list("department of agriculture", "USDA")) %>%
+    rbind(list("department of energy", "DOE")) %>%
+    rbind(list("department of labor", "DOL")) %>%
+    rbind(list("department of treasury", "Treasury")) %>%
+    rbind(list("department of justice", "DOJ")) %>%
+    rbind(list("nuclear regulatory commission", "NRC")) %>%
+    rbind(list("federal communications commission", "FCC")) %>%
+    rbind(list("department of housing and urban developm", "HUD")) %>%
+    rbind(list("federal reserve system", "FRS")) %>%
+    rbind(list("international trade commission", "ITC")) %>% 
+    rbind(list("federal energy regulatory commission", "FERC")) %>%
+    rbind(list("commodity futures trading commission", "CFTC")) %>%
+    rbind(list("department of veteran affairs", "DVA")) %>% 
+    rbind(list("consumer financial protection bureau", "CFPB")) %>% 
+    rbind(list("department of defense", "Defense")) %>% 
+    rbind(list("social security administration", "SSA"))
+
+  
+topicagencyyear <- "./Data/topicagencyyear.csv" %>% 
+  paste0(path,.) %>% 
+  fread()
+
+agencydisp <- topicagencyyear[,list(AgencyDisp = 1 - sum(AgencyPercent^2)),
+                              by = "TopicNumber,year"]
+  
+ff12labels <- "./Data/Indlabels12.txt" %>%
+  paste0(path,.) %>%
+  readLines
+setkey(mapagency, agency)
+
+ms <- function(x){
+  out <- modelsummary(x, stars = c('*' = .1, '**' = 0.05 ,'***' = .01),
+               gof_map = c("nobs", "r.squared"),
+               coef_omit = "(Intercept)|topic|Log|ppe|ebitda|sale|complex|tobin|segm",
+               output = "flextable") %>% 
+    theme_box() %>% 
+    width(width = 1.0) %>% 
+    height(height = 0.15)
+  return(out)
+}
+
+ms_all <- function(x){
+  out <- modelsummary(x, stars = c('*' = .1, '**' = 0.05 ,'***' = .01),
+              gof_map = c("nobs", "r.squared"), coef_map = cm,
+               output = "flextable") %>% 
+    theme_box() %>% 
+    width(width = 1.0)  %>% 
+    height(height = 0.15)
+  return(out)
+}
+
+controls <- c("regul.disp", "topic.disp", "regul.complex.log","LogWords10K", "ppe_at", "ebitda_at", "log_sale", "tobin", "Nsegments") %>% paste0("_norm")
+  
+
+reg_type <- function(tp) {
+  yvars <- c("lead.sga_at", "lead.tfp", "lead.roa", "lead.growth", "lead.growth.at","lead.emp_at") %>% paste0("_norm")
+  type_controls <- controls
+  type_controls[1] <- paste0("regul.disp", tp, "_norm")
+  type_controls[2] <- paste0("topic.disp", tp, "_norm")
+  type_controls[3] <- paste0("regul.complex.log", tp, "_norm")
+  line <- paste0(type_controls, collapse = " + ") %>% paste0(yvars, " ~ ", .,"|FF48 + FF48_year + cik")
+  labs <- c("sga", "tfp", "roa", "growth", "growth_at", "emp")
+  reg <- NULL
+
+  for(i in 1:length(yvars)){
+    reg[[labs[i]]] <- feols(as.formula(line[[i]]), data = companyyear)
+  }
+
+  return(reg)
+}
+
+```
+
+# Online Appendix
+
+# Table A1
+
+
+```{r}
+require(haven)
+require(readstata13)
+burden10K <- read.dta13("/Users/evolkova/Dropbox/Projects/Govt Agenda/Joseph's stuff/measures of regulation/burden (10-K).dta") %>% data.table
+burdenRedData <- read.dta13("/Users/evolkova/Dropbox/Projects/Govt Agenda/Joseph's stuff/measures of regulation/burden (RegData).dta") %>% data.table
+
+m <- match(paste(companyyear$GVKEY, companyyear$year), paste(burden10K$gvkey, burden10K$year))
+companyyear$burden10K_share <- burden10K$share[m] %>% win
+
+data <- readstata13::read.dta13("/Users/evolkova/Dropbox/Projects/Govt Agenda/Sandbox/20230127/Joseph_Replicate/for regressions.dta") %>% data.table
+m <- match(paste(companyyear$GVKEY, companyyear$year), paste(data$gvkey, data$year))
+
+companyyear$RegIn_Regulations <- data$RegIn_Regulations[m] %>% win
+companyyear$RegIn_Responses <- data$RegIn_Responses[m] %>% win
+companyyear$RegIn_Time <- data$RegIn_Time[m] %>% win
+companyyear$RegIn_Dollar <- data$RegIn_Dollar[m] %>% win
+
+m <- match(paste(companyyear$GVKEY, companyyear$year), paste(burdenRedData$gvkey, burdenRedData$year))
+x <- burdenRedData[m] %>% select("regd_words", "regd_restrictions", "regd_restrictions_share")
+for(i in dim(x)[2]) x[[i]] <- win(x[[i]])
+companyyear <- cbind(companyyear, x)
+
+cols <- c("RegIn_Regulations", "RegIn_Responses", "RegIn_Time", "RegIn_Dollar",
+          "regd_words", "regd_restrictions", "regd_restrictions_share")
+for(cl in cols) {
+    x <- companyyear[[cl]]
+    x <- (x - mean(x, na.rm = T))/sd(x, na.rm = T)
+    nm_var <- paste0(cl, "_norm")
+    companyyear[, (nm_var) := x]
+  }
+
+calc_cor <- function(var){
+  companyyear$x <- companyyear[[var]]
+  cr1 <- cor(companyyear$regul.disp, companyyear[[var]], use = "complete.obs")
+  cr2 <- cor(companyyear$regul.complex.log, companyyear[[var]], use = "complete.obs")
+  cr3 <- mean(companyyear[,list(cr = cor(regul.disp, x, use = "complete.obs")), by = year][[2]])
+  cr4 <- mean(companyyear[,list(cr = cor(regul.complex.log, x, use = "complete.obs")), by = year][[2]])
+  cr5 <- cor(companyyear$topic.disp, companyyear[[var]], use = "complete.obs")
+  cr6 <- mean(companyyear[,list(cr = cor(topic.disp, x, use = "complete.obs")), by = year][[2]])
+  
+  out <- data.table(name = var, cor_regul.frag = cr1, cor_regul.quant = cr2, cor_topic.frag = cr5,
+                    cor_regul.frag.yr = cr3, cor_regul.quant.yr = cr4,
+                    cor_topic.frag.yr = cr6)
+  for(i in 2:7) out[[i]] <- round(out[[i]], 2)
+  return(out)
+}
+
+cor_table <- calc_cor("regul.complex.log") %>% 
+ rbind(calc_cor("burden10K_share")) %>% 
+ rbind(calc_cor("RegIn_Regulations")) %>% 
+ rbind(calc_cor("RegIn_Responses")) %>% 
+ rbind(calc_cor("RegIn_Time")) %>% 
+ rbind(calc_cor("regd_words")) %>% 
+ rbind(calc_cor("regd_restrictions")) %>% 
+ rbind(calc_cor("regd_restrictions_share")) 
+
+
+cor_table %>% flextable() #%>% theme_box() %>% width(width = 1.3) 
+```
+
+
+# **Table A2**
+
+```{r}
+yvars <- c( "company_FR.frag" , "agencies_10K.frag") %>% paste0("_norm")
+line <- controls %>% paste0(collapse = " + ") %>% paste(yvars, "~ ",.,"|FF48_year + FF48 + cik + year")
+
+reg <- NULL
+for(i in 1:length(line)) reg[[yvars[i]]] <- feols(as.formula(line[i]), data = companyyear[FF12 == 11])
+
+reg %>% ms_all
+```
+
+# **Table A3**
+
+
+# **Table A4: Relationship between Rules and Notices**
+
+All variables are normalized
+
+Here we take a log(1 + words) in rules and notice. Then we also standarise it: mean = 0 and st.dev = 1.
+
+```{r}
+data_lead_lag <- NULL
+long.topics.prob <- NULL
+
+for(yr in sort(unique(topics.prob$year)))
+{
+
+  tmp <- topics.prob[year == yr] %>% 
+    select(1:100,"type", "nwords", "agency", "year", "Nagencies") %>% 
+    melt(id.vars = c("type", "nwords", "agency", "year", "Nagencies")) %>% 
+    mutate(TopicWords = value*nwords/Nagencies) %>% 
+    rename("TopicNumber" = "variable")
+
+  
+  tmp <- tmp[!is.na(agency), list(TopicWords.Notice = sum(TopicWords[type == "Notice"]),
+                                 TopicWords.Rule = sum(TopicWords[type == "Rule"])),by = "TopicNumber,year,agency"]
+  
+  data_lead_lag <- data_lead_lag %>% rbind(tmp)
+}
+
+setkey(data_lead_lag, TopicNumber, year, agency)
+
+data_lead_lag[, `:=`(
+  lag1.TopicWords.Notice = shift(TopicWords.Notice, n = 1, type = "lag"),
+  lag2.TopicWords.Notice = shift(TopicWords.Notice, n = 2, type = "lag"),
+  lead1.TopicWords.Notice = shift(TopicWords.Notice, n = 1, type = "lead"),
+  lead2.TopicWords.Notice = shift(TopicWords.Notice, n = 2, type = "lead")), by = "TopicNumber,agency"]
+
+data_lead_lag <- data_lead_lag[!is.na(lag2.TopicWords.Notice) & !is.na(lead2.TopicWords.Notice)]
+
+
+
+data_lead_lag[, agencyNtime := paste(agency,year)]
+data_lead_lag[, timeNtopic := paste(year,TopicNumber)]
+data_lead_lag[, agencyNtopic := paste(year,TopicNumber)]
+
+st <- function(x) {
+  x <- log(1 + x)
+  x <- win( (x - mean(x, na.rm = T))/sd(x,na.rm = T) )
+}
+data_lead_lag[, `:=`(log_rule = st(TopicWords.Rule),
+                           lag1_notice = st(lag1.TopicWords.Notice),
+                           lag2_notice = st(lag2.TopicWords.Notice),
+                           lead1_notice = st(lead1.TopicWords.Notice),
+                           lead2_notice= st(lead2.TopicWords.Notice))]
+line <- NULL
+line[[1]] <- "log_rule ~ lag1_notice + lag2_notice|agency + year + TopicNumber"
+line[[2]] <- "log_rule ~ lead1_notice + lead2_notice|agency + year + TopicNumber"
+line[[3]] <- "log_rule ~ lag1_notice + lag2_notice + lead1_notice + lead2_notice|agency + year + TopicNumber"
+line[[4]] <- "log_rule ~ lag1_notice + lag2_notice + lead1_notice + lead2_notice|agencyNtime + timeNtopic + agencyNtopic"
+
+reg <- lapply(line, function(x) feols(as.formula(x), data = data_lead_lag))
+reg %>% ms
+```
+
+
+
+
+## Figure Stock vs Flow 
+
+Rolling 5 and 10 years
+
+```{r}
+x <- companyyear %>% select("regul.disp", "regul.disp_rolling5", "regul.disp_rolling10", "year") %>% 
+  melt(id.var = "year") %>% 
+  group_by(year,variable) %>% 
+  summarise(value = mean(value, na.rm = T)) %>% 
+  mutate(variable = gsub("regul.disp_rolling10", "3. Rolling 10 years", variable)) %>% 
+  mutate(variable = gsub("regul.disp_rolling5", "2. Rolling 5 years", variable)) %>% 
+  mutate(variable = gsub("regul.disp", "1. Main measure", variable))
+
+ggplot(x, aes(x = year, y = value, col = variable)) + geom_line() + 
+  theme(legend.position = "bottom") + 
+  guides(col = guide_legend(nrow = 1, byrow = FALSE)) + 
+  labs(col = NULL, x = "Year", y = "Regulatory Fragmentation") + th()
+```
+
+
+\newpage
+
+# **Table A2. Alternative LDAs**
+
+## *Panel A, MD&A Section*
+
+```{r MDA, results = "asis"}
+reg_type("_item7") %>% ms
+```
+
+## *Panel B, Item1 Section*
+
+```{r item1, results = "asis"}
+reg_type("_item1") %>% ms
+```
+
+## *Panel C, Most Intensive Topic*
+
+```{r main_topic, results = "asis"}
+reg_type("_main") %>% ms
+```
+
+## *Panel D, Drop 3 Most Common Topics*
+
+```{r no3, results = "asis"}
+reg_type("_no3") %>% ms
+```
+
+\newpage
+
+# **Table A3, Different Number of Topics**
+
+## *Panel A, 57 topics*
+
+```{r KV_groups, results = "asis"}
+reg_type("_57") %>% ms
+```
+
+## *Panel B, 70 topics*
+
+```{r JK_groups, results = "asis"}
+reg_type("_70") %>% ms
+```
+
+## *Panel C, 200 topics*
+
+```{r 200_topics, results = "asis"}
+reg_type("_200") %>% ms
+```
+
+\newpage
+
+## *Panel D, 300 topics*
+
+```{r 300_topics, results = "asis"}
+reg_type("_300") %>% ms
+```
+
+## *Panel E, 1000 topics*
+
+```{r 1000_topics, results = "asis"}
+reg_type("_1000") %>% ms
+```
+
+
+\newpage
+
+# Rolling 5 and Rolling 10 year 
+
+Here we looks at the measure based on rolling 5 years of the rules (year - 1 has weight 1, year - 2 has weight 1/2, -3 has weight 1/3 and -4 has weight 1/4, -5 is 1/5)
+
+```{r rolling5, results = "asis"}
+reg_type("_rolling5") %>% ms
+```
+
+We repeat the same exercise but go for 10 years
+
+```{r rolling10, results = "asis"}
+reg_type("_rolling10") %>% ms
+```
+
+\newpage
+
+
+# **Table A4. Recent IPOs and Old Companies **
+
+## Panel A. Recept IPOs
+
+This table only includes companies that went public less than 10 years ago 
+
+```{r young_companies, results = "asis"}
+reg_subsample <- function(dta){
+  yvars <- c("lead.sga_at", "lead.tfp", "lead.roa", "lead.growth", "lead.growth.at","lead.emp_at") %>% paste0("_norm")
+  controls <- c("regul.disp", "topic.disp", "regul.complex.log","LogWords10K", "ppe_at", "ebitda_at", "log_sale", "tobin", "Nsegments") %>% paste0("_norm")
+  
+  line <- paste0(controls, collapse = " + ") %>% paste0(yvars, " ~ ", .,"|FF48 + FF48_year + cik")
+  labs <- c("sga", "tfp", "roa", "growth", "growth_at", "emp")
+  reg <- NULL
+  
+  for(i in 1:length(yvars)){
+      reg[[labs[i]]] <- feols(as.formula(line[[i]]), data = dta)
+  }
+  return(reg)
+}
+
+companyyear[year - ipo_year < 10] %>% reg_subsample %>% ms
+```
+

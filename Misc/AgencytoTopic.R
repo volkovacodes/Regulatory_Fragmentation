@@ -52,6 +52,8 @@ master[!is.na(RIN) & n == 1, type2 := "RIN"]
 master[!is.na(RIN) & n > 1, type2 := "old_RIN"]
 setkey(master, publication_date)
 
+fwrite(master, "/Users/evolkova/Dropbox/Projects/Govt Agenda/Data/fedreg_rin.csv")
+
 ############################################################################
 ############################# LOADING TOPICS ###############################
 ############################################################################

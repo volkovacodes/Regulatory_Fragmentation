@@ -507,3 +507,33 @@ cat("*Panel C: Agencies with biggest change around 2008-09 financial crisis*")
 difgraph.agency(2006:2008, 2009:2011, "#Words in 2006-2008","#Words in 2009-2011") %>% print
 ```
 
+
+```{r drop1prc, fig.width=7.5, fig.height=10}
+### source /Users/evolkova/Dropbox/Projects/Govt Agenda/Sandbox/20210812/Drop_1percent.R
+require(patchwork)
+simulations <- fread("/Users/evolkova/Dropbox/Projects/Govt Agenda/Sandbox/20210812/drop_1percent.csv")
+
+pl <- function(y, xaxis_lab){
+  data <- simulations[yvar == y]
+  #print(paste0(y, ": real t-stat exceeds simulations in ", sum(data[1:1001]$`t value` > data[1]$`t value`), " out of 1000 iterations |", y, ": real t-stat is below simulations in ", sum(data[1:1001]$`t value` < data[1]$`t value`), " out of 1000 iterations"))
+  
+  ggplot(data = data[iter > 0]) + 
+  geom_histogram(aes(`t value`), bins = 50, color="#000099", fill="lightblue") +
+  theme_minimal() + xlab(xaxis_lab) + ylab("Count") + 
+  geom_vline(xintercept = data[iter == 0]$`t value`, col = "red")
+  
+}
+
+pl1 <- pl("lead.sga_at", "T-statistics in SGA/AT regressions")
+pl2 <- pl("lead.tfp", "T-statistics in TFP regressions")
+pl3 <- pl("lead.roa", "T-statistics in ROA regressions")
+pl4 <- pl("lead.growth", "T-statistics in Sales Growth regressions")
+pl5 <- pl("lead.growth.at", "T-statistics in Assets Growth regressions")
+pl6 <- pl("lead.emp_at", "T-statistics in EMP/AT regressions")
+
+
+(pl1|pl2) /
+(pl3|pl4) /
+(pl5|pl6)
+```
+
