@@ -1,0 +1,592 @@
+---
+title: "Regulatory Fragmentation: Figures"
+author: "Kalmenovitz, Lowry, Volkova"
+date: "2023-10-20"
+output:
+  html_document: 
+    toc: yes
+    toc_float: yes
+    highlight: tango
+    theme: cosmo
+    fig_width: 7.5
+    fig_height: 3.65
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, dpi = 300)
+```
+
+# **Preparation**
+
+## Load Packages
+
+This code loads packages used in R and provide a path to data folder. 
+
+```{r load_packages}
+### install.package(pacman)
+require(pacman)
+p_load(ggplot2, data.table, lubridate, ggthemes, dplyr, RColorBrewer, rmarkdown, randomcoloR, 
+       knitr, psych, wordcloud, kableExtra, tidyverse, flextable, scales)
+
+### path to files 
+data_path <- "/Users/evolkova/Dropbox/Projects/Govt Agenda/Data/"
+```
+
+## Create Labels for Common Agencies
+
+This chunk of code creates abbreviations for names of the key agencies.
+
+```{r agency_names}
+mapagency <- data.table(agency = "environmental protection agency", label = "EPA") %>%
+  rbind(list("department of health and human services", "DHHS")) %>%
+  rbind(list("department of transportation", "Transportation")) %>%
+  rbind(list("department of commerce", "Commerce")) %>%
+  rbind(list("securities and exchange commission", "SEC")) %>%
+  rbind(list("department of interior", "DOI")) %>%
+  rbind(list("department of agriculture", "USDA")) %>%
+  rbind(list("department of energy", "DOE")) %>%
+  rbind(list("department of labor", "DOL")) %>%
+  rbind(list("department of treasury", "Treasury")) %>%
+  rbind(list("department of justice", "DOJ")) %>%
+  rbind(list("nuclear regulatory commission", "NRC")) %>%
+  rbind(list("federal communications commission", "FCC")) %>%
+  rbind(list("department of housing and urban developm", "HUD")) %>%
+  rbind(list("federal reserve system", "FRS")) %>%
+  rbind(list("international trade commission", "ITC")) %>%
+  rbind(list("federal energy regulatory commission", "FERC")) %>%
+  rbind(list("commodity futures trading commission", "CFTC")) %>%
+  rbind(list("department of veteran affairs", "DVA")) %>%
+  rbind(list("consumer financial protection bureau", "CFPB")) %>%
+  rbind(list("department of defense", "Defense")) %>%
+  rbind(list("social security administration", "SSA"))
+
+setkey(mapagency, agency)
+
+
+mapagency %>% 
+  flextable() %>% 
+  autofit() %>% 
+  theme_booktabs()
+```
+
+## Load Datasets
+
+```{r load_data_wordcloud}
+### this file includes top-100 words per topic
+### it is a list of 100 tables 
+### PROVIDED in the replication package
+wordcloudlist <- "wordcloudlist.rds" %>%
+  paste0(data_path, .) %>%
+  readRDS()
+
+wordcloudlist[[1]] %>% 
+  head(20) %>% 
+  flextable() %>% 
+  autofit()
+```
+
+```{r load_data_labels}
+### this file includes labels of all 100 topics
+### PROVIDED in the replication package
+labels <- "topic_labels_ML_KV_JK.csv" %>%
+  paste0(data_path, .) %>%
+  fread(select = c("ShortLabel", "Topic"))
+
+labels %>% 
+  head(10) %>% 
+  flextable() %>% 
+  autofit()
+```
+
+```{r load_data_companyyear}
+### this is the main file
+### SYNTHETIC version is included in the replication package
+companyyear <- "companyyear_final.rds" %>%
+  paste0(data_path, .) %>%
+  readRDS() %>% 
+  select("cik", "name", "year", "FF12", "regul.disp", "topic.disp", "Topic29")
+
+companyyear %>% 
+  head(10) %>% 
+  flextable() %>% 
+  autofit()
+
+```
+
+```{r load_data_topicagencyyear}
+### this file shows topic distribution over agency-years
+### PROVIDED in the replication package
+topicagencyyear <- "topicagencyyear.csv" %>%
+  paste0(data_path, .) %>%
+  fread()
+
+topicagencyyear %>% 
+  head(10) %>% 
+  flextable() %>% 
+  autofit()
+
+```
+
+```{r load_data_fedreg}
+### this file include data obtained from Federal Register
+### PROVIDED in the replication package
+fedreg <- "fedreg_with_words.csv" %>%
+  paste0(data_path, .) %>%
+  fread()
+
+fedreg %>% 
+  head(10) %>% 
+  flextable() %>% 
+  autofit()
+
+```
+
+
+```{r load_data_placebo}
+### this file include results of placebo test
+### PROVIDED in the replication package
+### Code for random simulations is also provided
+
+firm_placebo <- "firm_placebo.csv" %>% 
+  paste0(data_path,.) %>% 
+  fread
+
+firm_placebo %>% 
+  head(10) %>% 
+  flextable() %>% 
+  autofit()
+```
+
+# **Figure 1: Total number of words in the Federal Register**
+
+```{r fig1A, results = "asis", dpi = 300,fig.height = 5, fig.width = 7.5}
+
+data <- fedreg[year %in% 1995:2019 & type %in% c("Notice", "Proposed Rule", "Rule"), list(Words = sum(nwords)), by = c("year,type")]
+
+library(ggplot2)
+
+plot <- ggplot(data, aes(x = year, y = Words, col = type)) + 
+  geom_line() +
+  ylab("Words in Federal Register") + 
+  theme_minimal() + 
+  theme(axis.title.x = element_blank()) +
+  scale_color_brewer(palette = "Paired") +
+  scale_y_continuous(labels = comma,limits = c(0, 8*10^6)) + 
+  guides(color = guide_legend(title = "Document Type", ncol = 3)) + 
+  theme(legend.position='bottom') 
+
+
+      
+print(plot)
+```
+
+# **Figure 2: Topic clouds**
+
+```{r topic3}
+make_cloud <- function(i) {
+  wordcloud(wordcloudlist[[i]]$term, wordcloudlist[[i]]$beta, colors = brewer.pal(8, "Dark2"), random.order = F) %>%
+    print()
+}
+make_cloud(3)
+```
+
+```{r topic5}
+make_cloud(5)
+```
+
+```{r topic21}
+make_cloud(21)
+```
+
+```{r topic23}
+make_cloud(23)
+```
+
+# **Figure 3: Regulatory fragmentation histograms**
+
+## *Panel A: Fragmentation of topics across agencies  *
+
+```{r fig3a, results = "asis", dpi = 300}
+data <- topicagencyyear[, list(disp = 1 - sum(AgencyPercent^2)), by = c("year,TopicNumber")]
+
+p <- ggplot(data = data, aes(disp)) +
+  geom_histogram(aes(y = 0.01 * ..density..), fill = "darkgreen", binwidth = 0.01, color = "black") +
+  theme_minimal() +
+  xlab("Dispersion of Topics Across Agencies") +
+  ylab("Density [% of topic-year obs]")
+
+print(p)
+```
+
+## *Panel B: Dispersion of topics within each firm-year*
+
+```{r fig3b, results = "asis", dpi = 300}
+p <- ggplot(data = companyyear, aes(topic.disp)) +
+  geom_histogram(aes(y=0.0025*..density..),fill="steelblue", col = "darkblue", bins = 30) + 
+  theme_minimal() + xlab("Dispersion of Topics Within Each Firm-Year") + 
+  ylab("Density [% of Firm-Year Obs]")
+
+print(p)
+```
+
+
+## *Panel C: Regulatory fragmentation at the firm-year level*
+
+```{r fig3c, results = "asis", dpi = 300}
+p <- ggplot(data = companyyear, aes(regul.disp)) +
+  geom_histogram(aes(y = 0.005 * ..density..), fill = "purple", binwidth = 0.005, color = "purple4") +
+  theme_minimal() +
+  xlab("Regulatory Fragmentation") +
+  ylab("Density [% of firm-year obs]")
+print(p)
+```
+
+# **Figure 4: Time trends in regulatory fragmentation**
+
+## *Panel A: 12 Fama-French Industries*
+
+```{r ff12, results = "asis"}
+### generate palette with 12 colors
+pl <- distinctColorPalette(12)
+
+## create labels for FF12 industries
+labs <- data.table(ind = 1:12, lab = c("1 NoDur", "2 Durbl", "3 Manuf", "4 Enrgy ", "5 Chems", "6 BusEq", "7 Telcm", "8 Utils", "9 Shops", "10 Hlth", "11 Money", "12 Other"))
+
+## add labels to company-year file
+companyyear$FF12_lab <- factor(labs[match(companyyear$FF12, labs$ind)]$lab, levels = labs$lab)
+
+companyyear[, mean(regul.disp), by = "FF12_lab,year"] |>
+  ggplot(aes(y = V1, x = year, col = FF12_lab, group = FF12_lab)) +
+  geom_line() +
+  theme_minimal() +
+  theme(
+    axis.line = element_line(size = rel(1), colour = "black"),
+    panel.grid.major = element_line(colour = "#d3d3d3"),
+    panel.grid.minor = element_blank(),
+    panel.border = element_blank(), panel.background = element_blank(),
+    plot.title = element_text(size = rel(1.5), face = "bold"),
+    axis.text.x = element_text(colour = "black", size = rel(1.3)),
+    axis.title.x = element_text(colour = "black", size = rel(1.3)),
+    axis.title.y = element_text(colour = "black", size = rel(1.3)),
+    axis.text.y = element_text(colour = "black", size = rel(1.4))
+  ) +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  xlab("Year") +
+  ylab("Regulatory Fragmentation") +
+  scale_color_manual(values = pl, name = "Industry") +
+  ylim(0.72, 0.88)
+
+```
+
+## *Panel B: Fama-French Industry #1 (Non-Durables)*
+
+```{r ff1, results = "asis"}
+pl <- distinctColorPalette(length(unique(companyyear[FF12 == 1]$cik)))
+
+companyyear[FF12 == 1] |>
+  ggplot(aes(y = regul.disp, x = year, col = as.character(cik), group = cik)) +
+  geom_line(alpha = 0.5, size = 0.5) +
+  theme_minimal() +
+  theme(legend.position = "none") +
+  theme(
+    axis.line = element_line(size = rel(1), colour = "black"),
+    panel.grid.major = element_line(colour = "#d3d3d3"),
+    panel.grid.minor = element_blank(),
+    panel.border = element_blank(), panel.background = element_blank(),
+    plot.title = element_text(size = rel(1.5), face = "bold"),
+    axis.text.x = element_text(colour = "black", size = rel(1.3)),
+    axis.title.x = element_text(colour = "black", size = rel(1.3)),
+    axis.title.y = element_text(colour = "black", size = rel(1.3)),
+    axis.text.y = element_text(colour = "black", size = rel(1.4))
+  ) +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  xlab("Year") +
+  ylab("Regulatory Fragmentation") +
+  scale_color_manual(values = pl) +
+  ylim(0.72, 0.88)
+
+```
+
+
+# **Figure 5: Changes in Regulatory Fragmentation around Trump Election and the Global Financial Crisis**
+
+## *Panel A: Topics with the biggest change in fragmentation around the 2016 presidential election*
+
+```{r fig5a}
+difgraph <- function(int1, int2, lab1, lab2) {
+  
+  ### generate agency dispersion file 
+  agencydisp <- topicagencyyear[, list(AgencyDisp = 1 - sum(AgencyPercent^2)), by = "TopicNumber,year"]
+  
+  ### measure interval1 and interval2 dispersions by topic
+  increases <- agencydisp[, list(
+    regul1 = mean(AgencyDisp[year %in% int1]), 
+    regul2 = mean(AgencyDisp[year %in% int2])), by = TopicNumber]
+
+  ### estimate change between interval2 and interval1
+  increases[, change := regul2 - regul1]
+  
+  ### order observations by change
+  setkey(increases, change)
+  
+  ### add labels to data.table with increases
+  for(tp in as.numeric(1:100)) increases[TopicNumber == tp, label1 := labels$ShortLabel[match(tp, labels$Topic)]]
+  
+  ### add topicnumber to the start of the label 
+  increases[, label1 := paste0(TopicNumber, ".", label1)]
+  
+  ### rank all observations (they are ordered by change)
+  increases[, rank := 1:.N]
+  
+  ### split label into several lines, 15 characters each
+  increases[, label1 := paste0(strsplit(as.character(label1), "(?<=.{15})", perl = TRUE)[[1]], collapse = "\n"), 
+            by = rank]
+
+  ### look at top and bottom 3 topics by change
+  increases <- increases[rank %in% c(1:3, 98:100)]
+  
+  ### set layers (they will determine the order)
+  layers <- increases$label[c(6:4, 1:3)]
+  
+  ### set rank as data.table key
+  setkey(increases, rank)
+  
+  ### select variables and melt into longer data.table (for ggplot2)
+  increases <- increases %>%
+    select("TopicNumber", "label1", "regul1", "regul2", "rank") %>%
+    melt(id.vars = c("TopicNumber", "label1", "rank"))
+
+  ### rename columns
+  colnames(increases) <- c("topic", "label", "rank", "year", "reguldisp")
+
+  ### divide between increases and decreases 
+  increases[rank %in% 1:3, type := "2. Decrease"]
+  increases[rank %in% 98:100, type := "1. Increase"]
+  
+  ### put labels to word count before/after
+  increases[year == "regul1", year := lab1]
+  increases[year == "regul2", year := lab2]
+
+  ### add layers (determine the order)
+  increases$label <- factor(increases$label, levels = layers)
+
+  ### plot graph set up
+  plot <- increases %>%
+    ggplot(aes(x = label, y = reguldisp, fill = year)) +
+    geom_bar(stat = "identity", position = "dodge") +
+    facet_wrap(~type, scales = "free_x") +
+    theme_minimal() +
+    theme(legend.position='bottom', text=element_text(family="Georgia"),
+          legend.title = element_text(size = rel(0.75)), 
+          legend.text = element_text(size = rel(0.75)),
+          axis.title.x = element_blank()) +
+    guides(fill = guide_legend(title = "Period")) +
+    scale_fill_brewer(palette = "Paired") +
+    ylab("Dispersion Across Agencies")
+
+  return(plot)
+}
+
+difgraph(2014:2016, 2017:2019, "2014-2016", "2017-2019") %>% print()
+```
+
+## *Panel B: Topics with the biggest change in fragmentation around the 2008-09 financial crisis*
+
+```{r fig5b}
+difgraph(2006:2008, 2009:2011, "2006-2008","2009-2011") %>% print
+```
+
+# **Figure 6: A case study**
+
+## *Panel A: # words written on ‘banks’ topic each year, by the top 10 agencies*
+
+```{r fig6a, fig.height = 5, fig.width = 7.5}
+top_agencies <- function(years, TP) {
+  ### set colors
+  my_palette <- c(
+    "#E74C3C", "#3498DB", "#2ECC71", "#9B59B6", "#F1C40F",
+    "#E67E22", "#1ABC9C", "#000000", "#C0392B", "#2980B9",
+    "#ade5e5", "#8E44AD"
+  )
+
+  ### sort data
+  sorted_data <- topicagencyyear[order(-topicagencyyear$AgencyPercent), ]
+
+  ### select top-10 agencies based on sorting
+  top_10_agencies <- sorted_data[year == min(years) & TopicNumber == TP, agency][1:10]
+
+  ### select years and topic from topicagencyyear table
+  data <- topicagencyyear[year %in% years & TopicNumber == TP]
+
+  ### create shorter names for agencies using mapagency table
+  data$Agency <- mapagency$label[match(data$agency, mapagency$agency)]
+
+  ### some agency names are short and we can use them as labels
+  data[is.na(Agency), Agency := agency]
+
+  ### limit sample to top10 agencies
+  data <- data[agency %in% top_10_agencies]
+
+  ### this is the way how we can set an order to the legend in ggplot2
+  data$Agency <- factor(data$Agency, levels = unique(data[match(top_10_agencies, data$agency), ]$Agency))
+
+
+  ### plot the graph
+  pl <- ggplot(data, aes(x = Agency, y = TopicWords, fill = Agency)) +
+    geom_bar(stat = "identity") +
+    facet_wrap(~year) +
+    scale_fill_manual(values = my_palette) +
+    scale_y_continuous(labels = comma) +
+    ylab("Words written by an agency on selected topic") +
+    theme(
+      axis.text.x = element_blank(),
+      axis.ticks.x = element_blank(),
+      legend.position = "bottom",
+      axis.line = element_line(size = rel(1), colour = "black"),
+      panel.grid.major = element_line(colour = "#d3d3d3"),
+      panel.grid.minor = element_blank(),
+      panel.border = element_blank(),
+      panel.background = element_blank(),
+      plot.title = element_text(size = rel(1.5), face = "bold", hjust = 0.5),
+      axis.title.y = element_text(colour = "black", size = rel(1.2)),
+      axis.text.y = element_text(colour = "black", size = rel(1.2))
+    )
+  return(pl)
+}
+
+top_agencies(2014:2019, 29)
+```
+
+## *Panel B: Regulatory fragmentation each year, of 12 firms with highest weight on ‘banks’ topic*
+
+```{r fig6b, fig.height = 5, fig.width = 7.5}
+plot_top_companies <- function(years, TP, shockyr) {
+  my_palette <- c(
+    "#E74C3C", "#3498DB", "#2ECC71", "#9B59B6", "#F1C40F",
+    "#E67E22", "#1ABC9C", "#000000", "#C0392B", "#2980B9",
+    "#ade5e5", "#8E44AD", "#ade5e5", "#8E44AD"
+  )
+
+  ### select years and variables from the main file
+  data <- companyyear[year %in% years] %>% select("cik", "year", "name", TP, "regul.disp")
+
+  ### order data
+  setkey(data, cik, year)
+
+  ### count number of observations per CIK
+  data[, n1 := .N, by = cik]
+
+  ### drop companies with less than 5 obs (IPOs or exits)
+  data <- data[n1 > 5]
+
+  ### shorter the name of the company, make it robust to the name change
+  data[, name := substr((name[1]), 1, 35), by = cik]
+
+  ### set order by the frequency of selected topic
+  data <- data[order(data[[4]], decreasing = T)]
+
+  ### number companies by the frequency of the key topic per year
+  data[, n2 := 1:.N, by = "year"]
+
+  ### order by company and year
+  setkey(data, name, year)
+
+  ### fix order of the companies at the start of the sample
+  ### (i.e. company #1 is company with higher weight on TP topic)
+  data[, n3 := n2[1], by = name]
+
+  ### keep top12 companies (based on the topic frequency in the first year)
+  data <- data[n3 %in% 1:12]
+
+  ### this is the way company names will be ordered in the legend
+  data$name <- factor(data$name, levels = unique(data[order(n3)]$name))
+
+  ### plot the graph
+  pl <- data %>%
+    ggplot(aes(x = year, y = regul.disp, group = name, col = name, fill = name)) +
+    geom_line(alpha = 0.7, size = 1.5) +
+    theme(legend.position = "bottom") +
+    theme(
+      axis.line = element_line(size = rel(1), colour = "black"),
+      panel.grid.major = element_line(colour = "#d3d3d3"),
+      panel.grid.minor = element_blank(),
+      panel.border = element_blank(), panel.background = element_blank(),
+      plot.title = element_text(size = rel(1.5), face = "bold"),
+      axis.text.x = element_text(colour = "black", size = rel(1.0)),
+      axis.title.x = element_text(colour = "black", size = rel(1)),
+      legend.title = element_blank(),
+      legend.text = element_text(size = rel(0.6)),
+      axis.title.y = element_text(colour = "black", size = rel(1.2))
+    ) +
+    theme(plot.title = element_text(hjust = 0.5)) +
+    xlab("Year") +
+    ylab("Regulatory Fragmentation") +
+    scale_color_manual(values = my_palette, name = "Company Name") +
+    ylim(0.70, 0.85) +
+    guides(col = guide_legend(title.position = "left", label.position = "right", ncol = 5)) +
+    geom_vline(xintercept = shockyr, linetype = "dashed", color = "red")
+  return(pl)
+}
+
+plot_top_companies(2014:2019, "Topic29", 2016) %>% print()
+```
+
+
+# **Figure 7: Placebo test to address endogeneity concerns**
+
+## *Panel A: Dept var = SG&A / assets*
+
+```{r fig7a, fig.height = 2, fig.width = 3}
+yvars <- c("lead.sga_at", "lead.tfp", "lead.roa", "lead.growth", "lead.growth.at", "lead.emp_at") %>% paste0("_norm")
+
+### we plot histogram of t-statistics
+### iteration zero = actual results (red line)
+### other iterations = placebo (light blue bars)
+pl <- function(y, fl = "lightblue"){
+  data <- firm_placebo[yvar == y & variable == "regul.disp_norm"]
+  
+  ggplot(data = data[iter > 0]) + 
+  geom_histogram(aes(`t value`), bins = 50, color="#000099", fill= fl) +
+  theme_minimal() + xlab("T-statistics") + ylab("Count") + 
+  geom_vline(xintercept = data[iter == 0]$`t value`, col = "red")
+  
+}
+
+pl(yvars[1])
+```
+
+
+## *Panel B: Dept var = TFP*
+
+```{r fig7b, fig.height = 2, fig.width = 3}
+pl(yvars[2])
+```
+
+## *Panel C: Dept var = ROA*
+
+```{r fig7c, fig.height = 2, fig.width = 3}
+pl(yvars[3])
+```
+
+## *Panel D: Dept var = Sales growth*
+
+```{r fig7d, fig.height = 2, fig.width = 3}
+pl(yvars[4])
+```
+
+## *Panel E: Dept var = Assets growth*
+
+```{r fig7e, fig.height = 2, fig.width = 3}
+pl(yvars[5])
+```
+
+## *Panel F: Dept var = Employment*
+
+```{r fig7f, fig.height = 2, fig.width = 3}
+pl(yvars[6])
+```
+
+# Session Info
+
+```{r session_info}
+sessionInfo()
+```

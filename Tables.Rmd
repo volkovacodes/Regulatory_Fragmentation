@@ -1,0 +1,437 @@
+---
+title: 'Regulatory Fragmentation: Tables'
+author: "Kalmenovitz, Lowry, Volkova"
+date: "2023-10-20"
+output:
+  html_document:
+    toc: yes
+    toc_float: yes
+    highlight: tango
+    theme: cosmo
+    fig_width: 7.5
+    fig_height: 3.65
+  word_document:
+    toc: yes
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+
+require(pacman)
+p_load(
+  ggplot2, data.table, lubridate, ggthemes, dplyr, RColorBrewer, rmarkdown, randomcoloR,
+  knitr, modelsummary, fixest, flextable, psych, wordcloud, lfe, kableExtra, tidyverse
+)
+
+set_flextable_defaults(
+  font.size = 10,
+  font.family = "Times New Roman",
+  hansi.family = "Times New Roman"
+)
+
+options("modelsummary_stars_note" = FALSE)
+
+### here we correct coefficients names
+cm <- c(
+  "regul.disp_norm" = "Regulation Fragmentation",
+  "topic.disp_norm" = "Dispersion of Topics",
+  "regul.complex.log_norm" = "Regulation Quantity",
+  "LogWords10K_norm" = "Log(Word,10-K)",
+  "Nsegments_norm" = "# Segments",
+  "ppe_at_norm" = "PPE/AT",
+  "ebitda_at_norm" = "EBITDA/AT",
+  "emp_sale_norm" = "Emp/Sale",
+  "log_sale_norm" = "Log(Sale)",
+  "log_at_norm" = "log(AT)",
+  "growth_norm" = "Sales Growth",
+  "tobin_norm" = "Tobin's Q"
+)
+
+
+ms <- function(x) {
+  out <- modelsummary(x,
+    stars = c("*" = .1, "**" = 0.05, "***" = .01),
+    gof_omit = "DF|Deviance|AIC|BIC|Log.Lik|R2 Within|R2 Pseudo|RMSE|adj",
+    coef_omit = "(Intercept)|topic|Log|ppe|ebitda|sale|complex|tobin|segm",
+    output = "flextable"
+  ) %>%
+    theme_box() %>%
+    width(width = 1.0) %>%
+    height(height = 0.15) %>% 
+    autofit()
+  return(out)
+}
+
+ms_all <- function(x) {
+  out <- modelsummary(x,
+    stars = c("*" = .1, "**" = 0.05, "***" = .01),
+    gof_omit = "DF|Deviance|AIC|BIC|Log.Lik|R2 Within|R2 Pseudo|RMSE|adj",
+    coef_map = cm,
+    output = "flextable"
+  ) %>%
+    theme_box() %>%
+    width(width = 1.0) %>%
+    height(height = 0.15) %>% 
+    autofit()
+  return(out)
+}
+
+controls <- c("regul.disp", "topic.disp", "regul.complex.log", "LogWords10K", "ppe_at", "ebitda_at", "log_sale", "tobin", "Nsegments") %>% paste0("_norm")
+```
+
+## Loading Data
+
+```{r load_company_data}
+data_path <- "/Users/evolkova/Dropbox/Projects/Govt Agenda/Data/"
+
+
+### load topic to agency
+#topicstoagencies <- data_path %>%
+#  paste0("topicagencyyear.csv") %>%
+#  fread()
+
+### list of raw variables for summary table
+vars_raw <- c(
+  "cik", "year", "FF48", "FF48_year", "regul.disp", "topic.disp", "coauthored",
+  "sale", "tfp", "Nsegments", "ppe_at", "ebitda_at", "MB", "growth", "growth.at",
+  "tobin", "sga_at", "emp_at", "inv_at", "roa", "lead.icode500", "icode500", "lead.Nsegments"
+)
+
+
+### list of normalized variables
+vars_norm <- c(
+  "regul.disp", "topic.disp", "regul.complex.log",
+  "regul.disp_Notice", "topic.disp_Notice", "regul.complex.log_Notice",
+  "regul.disp_Rule", "topic.disp_Rule", "regul.complex.log_Rule",
+  "regul.disp_RIN", "topic.disp_RIN", "regul.complex.log_RIN",
+  "regul.disp_old_RIN", "topic.disp_old_RIN", "regul.complex.log_old_RIN",
+  "regul.disp_rolling5", "topic.disp_rolling5", "regul.complex.log_rolling5", 
+  "LogWords10K", "ppe_at", "ebitda_at", "log_sale", "tobin", "Nsegments",
+  "company_FR.frag", "agencies_10K.frag",
+  "lead.sga_at", "lead.tfp", "lead.roa",
+  "lead.growth", "lead.growth.at", "lead.emp_at",
+  "lead.n_ipo", "lead.n_join", "lead.n_leaving_large_at_peers_scaled",
+  "lead.n_leaving_small_at_peers_scaled",
+  "lead.n_peers","lead.log_lobby", "lead.lobby"
+) %>% paste0("_norm")
+
+
+### this is the main file
+### SYNTHETIC version is included in the replication package
+
+companyyear <- "companyyear_final.rds" %>%
+  paste0(data_path, .) %>%
+  readRDS() %>% 
+  select(all_of(vars_raw), all_of(vars_norm))
+
+companyyear %>% 
+  head(10) %>% 
+  flextable() %>% 
+  autofit()
+
+```
+
+```{r load_emp_data}
+emp_data <- "emp_data.rds" %>% 
+  paste0(data_path, .) %>%
+  readRDS() %>% 
+  filter(!is.na(lead.unexpected_promotion)) %>% 
+  filter(!is.na(Words_hightopic))
+
+emp_data %>% 
+  head(10) %>% 
+  flextable() %>% 
+  autofit()
+```
+
+# **Table 2: Verification exercise**
+
+```{r table2}
+yvars <- c("company_FR.frag", "agencies_10K.frag") %>% paste0("_norm")
+line <- controls %>%
+  paste0(collapse = " + ") %>%
+  paste(yvars, "~ ", ., "|FF48 + FF48_year + cik")
+
+reg <- NULL
+for (i in 1:length(line)) reg[[yvars[i]]] <- feols(as.formula(line[i]), data = companyyear)
+
+ms_all(reg)
+```
+
+# **Table 3: Descriptive statistics**
+
+```{r descriptive}
+out <- NULL
+qnts.topic <- quantile(companyyear$topic.disp, c(0.2, 0.4, 0.6, 0.8))
+qnts.regul <- quantile(companyyear$regul.disp, c(0.2, 0.4, 0.6, 0.8))
+
+ind <- NULL
+ind[[1]] <- which(companyyear$topic.disp <= qnts.topic[1])
+ind[[2]] <- which(companyyear$topic.disp <= qnts.topic[2] & companyyear$topic.disp > qnts.topic[1])
+ind[[3]] <- which(companyyear$topic.disp <= qnts.topic[3] & companyyear$topic.disp > qnts.topic[2])
+ind[[4]] <- which(companyyear$topic.disp <= qnts.topic[4] & companyyear$topic.disp > qnts.topic[3])
+ind[[5]] <- which(companyyear$topic.disp > qnts.topic[4])
+ind[[6]] <- which(companyyear$regul.disp <= qnts.regul[1])
+ind[[7]] <- which(companyyear$regul.disp <= qnts.regul[2] & companyyear$regul.disp > qnts.regul[1])
+ind[[8]] <- which(companyyear$regul.disp <= qnts.regul[3] & companyyear$regul.disp > qnts.regul[2])
+ind[[9]] <- which(companyyear$regul.disp <= qnts.regul[4] & companyyear$regul.disp > qnts.regul[3])
+ind[[10]] <- which(companyyear$regul.disp > qnts.regul[4])
+
+out <- data.table(
+  Variable = "", T1 = "Topic", T2 = "Topic", T3 = "Topic", T4 = "Topic", T5 = "Topic",
+  R1 = "Regul", R2 = "Regul", R3 = "Regul", R4 = "Regul", R5 = "Regul"
+)
+
+out <- out %>% rbind(list("Quant", "0%-20%", "20%-40%", "40%-60%", "60%-80%", "80%-100%", "0%-20%", "20%-40%", "40%-60%", "60%-80%", "80%-100%"))
+
+
+comma <- function(x) formatC(x, big.mark = ",")
+mr <- function(x, n = 3) {
+  return(round(mean(x[!is.infinite(x)], na.rm = T), n))
+}
+
+vec <- c("# Obs.", comma(sapply(ind, length))) %>% as.list()
+out <- out %>% rbind(vec)
+
+vec <- c("Dispersion of Topics", sapply(ind, function(x) mr(companyyear[x]$topic.disp))) %>% as.list()
+out <- out %>% rbind(vec)
+
+vec <- c("Regulation Fragmentation", sapply(ind, function(x) mr(companyyear[x]$regul.disp))) %>% as.list()
+out <- out %>% rbind(vec)
+
+vec <- c("Sale", sapply(ind, function(x) mr(companyyear[x]$sale))) %>% as.list()
+out <- out %>% rbind(vec)
+
+vec <- c("TFP", sapply(ind, function(x) mr(companyyear[x]$tfp))) %>% as.list()
+out <- out %>% rbind(vec)
+
+vec <- c("# Segments", sapply(ind, function(x) mr(companyyear[x]$Nsegments))) %>% as.list()
+out <- out %>% rbind(vec)
+
+vec <- c("PPE/AT", sapply(ind, function(x) mr(companyyear[x]$ppe_at))) %>% as.list()
+out <- out %>% rbind(vec)
+
+vec <- c("EBITDA/AT", sapply(ind, function(x) mr(companyyear[x]$ebitda_at))) %>% as.list()
+out <- out %>% rbind(vec)
+
+vec <- c("MB", sapply(ind, function(x) mr(companyyear[x]$MB))) %>% as.list()
+out <- out %>% rbind(vec)
+
+vec <- c("Sales Growth, %", sapply(ind, function(x) mr(companyyear[x]$growth))) %>% as.list()
+out <- out %>% rbind(vec)
+
+vec <- c("Assets Growth, %", sapply(ind, function(x) mr(companyyear[x]$growth.at))) %>% as.list()
+out <- out %>% rbind(vec)
+
+vec <- c("Tobin's Q", sapply(ind, function(x) mr(companyyear[x]$tobin))) %>% as.list()
+out <- out %>% rbind(vec)
+
+vec <- c("SGA/AT", sapply(ind, function(x) mr(companyyear[x]$sga_at))) %>% as.list()
+out <- out %>% rbind(vec)
+
+vec <- c("EMP/AT", sapply(ind, function(x) mr(companyyear[x]$emp_at))) %>% as.list()
+out <- out %>% rbind(vec)
+
+vec <- c("INVT/AT", sapply(ind, function(x) mr(companyyear[x]$inv_at))) %>% as.list()
+out <- out %>% rbind(vec)
+
+vec <- c("ROA, %", sapply(ind, function(x) mr(companyyear[x]$roa))) %>% as.list()
+out <- out %>% rbind(vec)
+
+out %>%
+  flextable() %>%
+  theme_box() %>%
+  width(width = 1.3)
+```
+
+
+# **Table 4: The relation between regulatory fragmentation to costs, productivity and profitability**
+
+
+```{r sga_tfp_roa}
+reg_out <- function(y, ncols = 3) {
+  y <- paste0(y, "_norm")
+  fe <- c(rep("|FF48 + year + cik",ncols), rep("|FF48 + FF48_year + cik",ncols))
+
+  line <- controls %>% paste0(collapse = " + ") %>% paste0(y, " ~ ", ., fe)
+  reg <- NULL
+  for(i in 1:length(line)) reg[[paste0(i, ".", y[i])]] <- feols(as.formula(line[i]), data = companyyear) 
+  return(reg)
+}
+
+
+rep(c("lead.sga_at", "lead.tfp","lead.roa"), 2) %>% reg_out() %>% ms_all()
+```
+
+# **Table 5: The relation between regulatory fragmentation to growth and employmentr**
+
+```{r growth_growthat_emp}
+rep(c("lead.growth", "lead.growth.at","lead.emp_at"), 2) %>% reg_out() %>% ms_all()
+```
+
+\newpage
+
+
+# **Table 6: Regulatory fragmentation across segments of the Federal Register**
+
+## *Panel A. Regulatory Fragmentation in Notices vs Rules*
+
+### Notices
+
+```{r notices, results = "asis"}
+
+reg_type <- function(tp) {
+  yvars <- c("lead.sga_at", "lead.tfp", "lead.roa", "lead.growth", "lead.growth.at","lead.emp_at") %>% paste0("_norm")
+  type_controls <- controls
+  type_controls[1] <- paste0("regul.disp", tp, "_norm")
+  type_controls[2] <- paste0("topic.disp", tp, "_norm")
+  type_controls[3] <- paste0("regul.complex.log", tp, "_norm")
+  line <- paste0(type_controls, collapse = " + ") %>% paste0(yvars, " ~ ", .,"|FF48 + FF48_year + cik")
+  labs <- c("sga", "tfp", "roa", "growth", "growth_at", "emp")
+  reg <- NULL
+
+  for(i in 1:length(yvars)){
+    reg[[labs[i]]] <- feols(as.formula(line[[i]]), data = companyyear)
+  }
+
+  return(reg)
+}
+
+"_Notice" %>% reg_type() %>% ms()
+```
+
+### Rules 
+
+```{r rule, results = "asis"}
+"_Rule" %>% reg_type() %>% ms()
+```
+
+
+## *Panel B. Regulatory Fragmentation in FR Documents with new versus existing RIN*
+
+### New RIN 
+
+```{r rin, results = "asis"}
+"_RIN" %>% reg_type() %>% ms()
+```
+
+### Old RIN
+
+```{r old_rin, results = "asis"}
+"_old_RIN" %>% reg_type() %>% ms()
+```
+
+## *Panel C: Regulatory fragmentation, measured across stock of FR documents written within the past 5 years*
+
+```{r rolling5, results = "asis"}
+"_rolling5" %>% reg_type() %>% ms()
+```
+
+
+# **Table 7: Robustness of findings to firms without big operational changes**
+
+```{r}
+companyyear[,`:=`(index1 = 0, index2 = 0, index3 = 0)]
+companyyear[lead.icode500 != icode500, index1 := 1]
+companyyear[lead.Nsegments != Nsegments, index2 := 1]
+companyyear[abs(growth.at) > 20, index3 := 1]
+logic <- NULL
+logic[[1]] <- companyyear$index1 == 0
+logic[[2]] <- companyyear$index2 == 0
+logic[[3]] <- companyyear$index3 == 0
+logic[[4]] <- companyyear$index1 == 0
+logic[[5]] <- companyyear$index2 == 0
+logic[[6]] <- companyyear$index3 == 0
+logic[[7]] <- companyyear$index1 == 0
+logic[[8]] <- companyyear$index2 == 0
+logic[[9]] <- companyyear$index3 == 0
+
+
+yvars_sub <- c(rep("lead.sga_at",3), rep("lead.tfp", 3), rep("lead.growth",3)) %>% paste0("_norm") 
+
+line_sub <- controls %>% paste0(collapse = " + ") %>% paste0(yvars_sub, " ~ ", ., "|FF48 + cik + year")
+  
+lab <- c("SGA|ind", "SGA|seg", "SGA|size", "TFP|ind", "TFP|seg", "TFP|size", 
+         "Grwoth|ind", "Growth|seg", "Growth|size")
+reg <- NULL
+for(i in 1:9){
+  reg[[lab[i]]] <- feols(as.formula(line_sub[[i]]), companyyear[logic[[i]]]) 
+}
+
+reg %>% ms
+```
+
+\newpage
+
+# **Table 8: Industry composition **
+
+```{r ind_peers}
+yvars <- c( "lead.n_ipo", "lead.n_join","lead.n_leaving_small_at_peers_scaled",
+  "lead.n_leaving_large_at_peers_scaled", "lead.n_peers") %>% paste0("_norm")
+line <- controls %>% paste0(collapse = " + ") %>% paste(yvars, "~ ",.,"|FF48 + FF48_year + cik")
+
+reg <- NULL
+for(i in 1:length(line)) reg[[yvars[i]]] <- feols(as.formula(line[[i]]), data = companyyear)
+
+reg %>% ms
+```
+
+
+
+
+# **Table 9: Single-authored vs co-authored documents**
+
+```{r coauthored}
+yvars <- c("lead.sga_at", "lead.tfp", "lead.roa", "lead.growth", "lead.growth.at","lead.emp_at") %>% paste0("_norm")
+end <- " ~ regul.disp_norm*coauthored + regul.complex.log_norm*coauthored + topic.disp_norm*coauthored + LogWords10K_norm*coauthored + ppe_at_norm*coauthored + Nsegments_norm*coauthored + ebitda_at_norm*coauthored + log_sale_norm*coauthored + tobin_norm*coauthored|FF48 + FF48_year + cik"
+
+line <- paste(yvars, end)
+reg <- NULL
+for(i in 1:6) reg[[yvars[i]]] <- feols(as.formula(line[[i]]), companyyear) 
+
+reg %>% ms
+```
+
+
+
+# **Table 10: Regulatory fragmentation and lobbying expenses**
+
+```{r lobby_atreg}
+rep(c("lead.log_lobby", "lead.lobby"), 2) %>%  reg_out(.,ncol = 2) %>% ms_all()
+```
+
+
+# **Table 11: Role of agency factors in driving regulatory fragmentation**
+
+```{r agency_comp}
+cm1 <- c("Words_Notice" = "Words_Notice",
+       "Words_PRule" = "Words_PRule",
+       "Words_Rule" = "Words_Rule",
+       "Words_Notice:Words_hightopic" = "Words_Notice × Words_hightopic",
+       "Words_PRule:Words_hightopic" = "Words_PRule × Words_hightopic",
+       "Words_Rule:Words_hightopic" = "Words_Rule × Words_hightopic",
+       "Words_hightopic" = "Words_hightopic")
+
+
+
+line <- NULL
+line[[1]] <- "lead.unexpected_promotion ~ Words_Notice*Words_hightopic|year + agysub_full"
+line[[2]] <- "lead.unexpected_promotion ~ Words_Rule*Words_hightopic|year + agysub_full"
+
+reg <- NULL
+
+labs <- paste(1:2, c("Unexpected Promotion", "Unexpected Promotion"))
+for(i in 1:length(line)) reg[[labs[i]]] <- feols(as.formula(line[[i]]), data = emp_data)
+
+reg %>% modelsummary(
+    stars = c("*" = .1, "**" = 0.05, "***" = .01),
+    gof_omit = "DF|Deviance|AIC|BIC|Log.Lik|R2 Within|R2 Pseudo|RMSE|adj",
+    coef_map = cm1,
+    output = "flextable"
+  ) %>%
+    theme_box() %>%
+    width(width = 1.0) %>%
+    height(height = 0.15) %>% 
+    autofit()
+```
+
+

@@ -610,7 +610,6 @@ companyyear$lead.n_leaving_small_sale_peers_scaled <- ((companyyear$lead.n_leavi
 companyyear$lead.n_leaving_small_sale_peers_scaled <- companyyear$lead.n_leaving_small_sale_peers_scaled %>% fix %>% win %>% nm
 companyyear$lead.n_leaving_small_sale_peers_scaled <- companyyear$lead.n_leaving_small_sale_peers_scaled %>% nm
 
-
 ### 2  Coauthored topics
 ### source("./Misc/topic_coauthorship.R")
 coauthored <- fread(paste0(data_path, "/topic_coauthorship.csv"))
