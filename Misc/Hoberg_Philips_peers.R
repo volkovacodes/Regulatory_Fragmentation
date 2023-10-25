@@ -23,17 +23,45 @@ traiding_gvkeys <- crsp[month(ymd(date)) == 1 & !is.na(as.numeric(RETX)) & !is.n
 crsp <- crsp[,list(first_year = first_year[1], last_year = last_year[1], delist = delist[1]),by = PERMNO]
 crsp$gvkey <- comp$GVKEY[match(crsp$PERMNO, comp$LPERMNO)]
 
+
+### find companies with above median assets
+at_above <- companyyear %>%
+  group_by(FF48) %>%
+  mutate(median_at = quantile(at,0.5,na.rm = T)) %>%
+  filter(at > median_at) %>% 
+  select(GVKEY, year, FF48) %>% 
+  mutate(gvkey_year = paste(GVKEY, year))
+
+### find companies with above median sales
+sales_above <- companyyear %>%
+  group_by(FF48) %>%
+  mutate(median_sale = quantile(sale,0.5 ,na.rm = T)) %>%
+  filter(sale > median_sale) %>% 
+  select(GVKEY, year, FF48) %>% 
+  mutate(gvkey_year = paste(GVKEY, year))
+
 tnic3 <- fread("/Users/evolkova/Dropbox/Projects/Govt Agenda/Sandbox/20221027/tnic3_data.txt", sep = "\t") %>% 
   filter(year %in% 1994:2022) %>% 
   filter(!is.na(score)) %>% 
-  filter(gvkey1 %in% companyyear$GVKEY) 
+  filter(gvkey1 %in% companyyear$GVKEY) %>% 
+  mutate(gvkey2_year = paste(gvkey2, year))
+
+tnic3[, `:=`(large_at = 0, large_sale = 0)]
+tnic3[gvkey2_year %in% at_above$gvkey_year, large_at := 1]
+tnic3[gvkey2_year %in% sales_above$gvkey_year, large_sale := 1]
 
 setkey(tnic3, gvkey1, year, gvkey2)
-peers <- tnic3[,list(all_peers = paste0(gvkey2, collapse = ","), n_peers = length(unique(gvkey2))), by = "gvkey1,year"]
+peers <- tnic3[,list(all_peers = paste0(gvkey2, collapse = ","), 
+                     large_at_peers = paste0(gvkey2[large_at == 1], collapse = ","),
+                     large_sale_peers = paste0(gvkey2[large_sale == 1], collapse = ","),
+                     n_peers = length(unique(gvkey2))), by = "gvkey1,year"]
 setkey(peers, gvkey1, year)
 
 peers[, lag.all_peers := shift(all_peers, n = 1, type = "lag"), by = "gvkey1"]
 peers[, lead.all_peers := shift(all_peers, n = 1, type = "lead"), by = "gvkey1"]
+peers[, lag.large_at_peers := shift(large_at_peers, n = 1, type = "lag"), by = "gvkey1"]
+peers[, lag.large_sale_peers := shift(large_sale_peers, n = 1, type = "lag"), by = "gvkey1"]
+
 
 find.new <- function(x, y){
   x <- strsplit(x, split = ",") %>% unlist
@@ -74,6 +102,16 @@ peers[, leaving_peers := find.new(lag.all_peers, all_peers), by = "gvkey1,year"]
 peers[, n_leaving_peers := str_count(leaving_peers, ",")]
 peers[str_length(leaving_peers) > 0, n_leaving_peers := n_leaving_peers + 1]
 
+peers[, leaving_large_at_peers := find.new(lag.large_at_peers, large_at_peers), by = "gvkey1,year"]
+peers[, n_leaving_large_at_peers := str_count(leaving_large_at_peers, ",")]
+peers[str_length(leaving_large_at_peers) > 0, n_leaving_large_at_peers := n_leaving_large_at_peers + 1]
+
+peers[, leaving_large_sale_peers := find.new(lag.large_sale_peers, large_sale_peers), by = "gvkey1,year"]
+peers[, n_leaving_large_sale_peers := str_count(leaving_large_sale_peers, ",")]
+peers[str_length(leaving_large_sale_peers) > 0, n_leaving_large_sale_peers := n_leaving_large_sale_peers + 1]
+
+
+
 find_last <- peers %>% select("gvkey1", "year", "leaving_peers")
 find_last <- find_last[,list(gvkey2 = unlist(strsplit(leaving_peers,","))), by = "gvkey1,year"]
 m <- match(find_last$gvkey2, crsp$gvkey)
@@ -91,6 +129,7 @@ peers$n_poor_perf <- find_last$n_poor_perf[m]
 peers$n_acq <- find_last$n_acq[m]
 peers$n_delist <- find_last$n_delist[m]
 
-vars_need <- c("n_peers", "n_new_peers", "n_ipo" ,"n_leaving_peers", "n_poor_perf", "n_acq","n_delist", "n_peers_left_trading")
+vars_need <- c("n_peers", "n_new_peers", "n_ipo" ,"n_leaving_peers", "n_poor_perf", "n_acq","n_delist", 
+               "n_peers_left_trading", "n_leaving_large_at_peers", "n_leaving_large_sale_peers")
 out <- peers %>% select("gvkey1", "year", vars_need)
-fwrite(out, "/Users/evolkova/Dropbox/Projects/Govt Agenda/Data/HP_peers.csv")
+fwrite(out, "/Users/evolkova/Dropbox/Projects/Govt Agenda/data/peers.csv")

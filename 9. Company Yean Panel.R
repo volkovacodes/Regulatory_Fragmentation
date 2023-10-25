@@ -9,36 +9,49 @@ na0 <- function(x) {
   return(x)
 }
 
-win <- function(x, eps = 0.005){
+win <- function(x, eps = 0.005) {
   up <- quantile(x, na.rm = T, 1 - eps)
   down <- quantile(x, na.rm = T, eps)
-  x[x>up] <- up
-  x[x<down] <- down
+  x[x > up] <- up
+  x[x < down] <- down
   return(x)
 }
 
-cnt <- function(x){
-  if(length(x) < 3) return(0)
+nm <- function(x){
+  x[is.infinite(x)|is.nan(x)] <- NA
+  x <- (x - mean(x, na.rm = T))/sd(x, na.rm = T)
+  return(x)
+}
+
+cnt <- function(x) {
+  if (length(x) < 3) {
+    return(0)
+  }
   y <- str_count(x, ";") + 1
   return(y)
 }
 
-dsp <- function(x){
-  if(length(x) == 0) return(0)
-  y <- strsplit(x, split = ";") %>% unlist %>% as.numeric()
-  fracs <- y/sum(y)
+dsp <- function(x) {
+  if (length(x) == 0) {
+    return(0)
+  }
+  y <- strsplit(x, split = ";") %>%
+    unlist() %>%
+    as.numeric()
+  fracs <- y / sum(y)
   hhi <- sum(fracs^2)
   frag <- 1 - hhi
   return(frag)
 }
 
-sm <- function(x){
-  x <- strsplit(x, ";") %>% unlist %>% as.numeric
-  return(sum(x,na.rm = T))
+sm <- function(x) {
+  x <- strsplit(x, ";") %>%
+    unlist() %>%
+    as.numeric()
+  return(sum(x, na.rm = T))
 }
 
 data_path <- "/Users/evolkova/Dropbox/Projects/Govt Agenda/Data/"
-outpath <- "/Users/evolkova/Dropbox/Projects/Govt Agenda/Sandbox/20201029/temp_files/"
 
 ##################################################################################
 #################### LOAD LDA COMPANY DATA #######################################
@@ -47,7 +60,7 @@ outpath <- "/Users/evolkova/Dropbox/Projects/Govt Agenda/Sandbox/20201029/temp_f
 companyyear <- NULL
 for (yr in 1994:2019) {
   master <- NULL
-  
+
   for (i in 1:4) {
     master <- master %>%
       rbind(fread(paste0("/Users/evolkova/Dropbox/SEC Filings/10-K/Master with Compustat/master_", yr, i, ".csv")))
@@ -72,7 +85,7 @@ for (yr in 1994:2019) {
   master <- master[!is.na(at) & !is.na(Topic1) & !is.na(sic)]
 
   companyyear <- rbind(companyyear, master)
-  
+
   rm(master)
   rm(ldacompanies)
   rm(dtmcompanies)
@@ -88,12 +101,12 @@ companyyear <- companyyear[!duplicated(paste0(cik, year))]
 crsp <- "/Users/evolkova/Dropbox/DataY/CRSP/MSF/CRSP_MSF.csv" %>%
   fread()
 
-#crsp <- crsp[date > 19900101]
+# crsp <- crsp[date > 19900101]
 crsp[, date := ymd(date)]
 crsp <- crsp[month(date) == 12]
 crsp[, year := year(date)]
 crsp[, size := abs(PRC) * SHROUT]
-crsp[, ipo_year := min(year,na.rm = T), by = PERMNO]
+crsp[, ipo_year := min(year, na.rm = T), by = PERMNO]
 crsp <- crsp[year >= 1990]
 
 
@@ -181,7 +194,7 @@ comp[, lag.at := shift(at, 1, type = "lag"), by = "GVKEY"]
 comp[, growth.at := 100 * (at / lag.at - 1)]
 
 vars <- c(
-  "fyear", "sale", "growth", "MB", "ppe_at", "ebitda_at", "sga", "sga_at", "emp" ,"emp_sale", "emp_at", "xrd",
+  "fyear", "sale", "growth", "MB", "ppe_at", "ebitda_at", "sga", "sga_at", "emp", "emp_sale", "emp_at", "xrd",
   "capx_at", "inv_at", "fcf", "tobin", "leverage", "roa", "cash", "cash_at", "growth.at", "ipo_year"
 )
 
@@ -191,7 +204,7 @@ vars <- c(
 
 m <- match(paste(companyyear$cik, companyyear$year), paste(comp$cik, comp$year))
 tmp <- comp[m] %>%
-  select(vars)
+  select(all_of(vars))
 
 companyyear <- companyyear %>%
   cbind(tmp)
@@ -297,8 +310,8 @@ companyyear$lead3.tfp <- tfp$TFP[m]
 ### this function creates measures of frag/disp/complexity using the same company_year_topic.melt datatable
 
 company_year_topic.melt <- companyyear %>%
-  select("cik", "year", paste0("Topic", 1:100)) %>%
-  melt(id.vars = c("cik", "year")) %>% 
+  select("cik", "year", all_of(paste0("Topic", 1:100))) %>%
+  melt(id.vars = c("cik", "year")) %>%
   mutate(topic_year = paste(variable, year))
 
 getdata_upd <- function(filename, tp) {
@@ -309,54 +322,60 @@ getdata_upd <- function(filename, tp) {
   data <- topicstoagencies[, list(HHI = sum(AgencyPercent^2), Words = AllWords[1]),
     by = c("year,TopicNumber")
   ]
-  
+
   data[, topic_year := paste(paste0("Topic", TopicNumber), year)]
   m <- match(company_year_topic.melt$topic_year, data$topic_year)
-  
+
   company_year_topic.melt$hhi_topic_agency <- data$HHI[m]
   company_year_topic.melt$fedreg_topic_words <- data$Words[m]
-  
-  out <- company_year_topic.melt[, list(topic.disp = 1 - sum(value^2),
-                                        regul.disp = 1 - sum(value * hhi_topic_agency),
-                                        regul.complex.log = sum(value * log(fedreg_topic_words))), by = 'cik,year']
+
+  out <- company_year_topic.melt[, list(
+    topic.disp = 1 - sum(value^2),
+    regul.disp = 1 - sum(value * hhi_topic_agency),
+    regul.complex.log = sum(value * log(fedreg_topic_words))
+  ), by = "cik,year"]
   m <- match(paste0(companyyear$cik, companyyear$year), paste0(out$cik, out$year))
-  
+
   out <- out[m] %>% select(regul.disp, topic.disp, regul.complex.log)
   colnames(out) <- colnames(out) %>% paste0(tp)
   return(out)
 }
 
-### get files from this code ./Misc/AgencytoTopic.R 
-companyyear <- companyyear %>% 
-  cbind(getdata_upd("topicagencyyear.csv", "")) %>% 
-  cbind(getdata_upd("topicagencyyear_Notice.csv", "_Notice")) %>% 
-  cbind(getdata_upd("topicagencyyear_Proposed Rule.csv", "_PRule")) %>% 
-  cbind(getdata_upd("topicagencyyear_Rule.csv", "_Rule")) %>% 
-  cbind(getdata_upd("topicagencyyear_RIN.csv", "_RIN")) %>% 
-  cbind(getdata_upd("topicagencyyear_old_RIN.csv", "_old_RIN")) %>% 
-  cbind(getdata_upd("topictoagency5.csv", "_rolling5")) %>% 
-  cbind(getdata_upd("topictoagency10.csv", "_rolling10")) 
+### get files from this code ./Misc/AgencytoTopic.R
+companyyear <- companyyear %>%
+  cbind(getdata_upd("topicagencyyear.csv", "")) %>%
+  cbind(getdata_upd("topicagencyyear_Notice.csv", "_Notice")) %>%
+  cbind(getdata_upd("topicagencyyear_Proposed Rule.csv", "_PRule")) %>%
+  cbind(getdata_upd("topicagencyyear_Rule.csv", "_Rule")) %>%
+  cbind(getdata_upd("topicagencyyear_RIN.csv", "_RIN")) %>%
+  cbind(getdata_upd("topicagencyyear_old_RIN.csv", "_old_RIN")) %>%
+  cbind(getdata_upd("topictoagency5.csv", "_rolling5")) %>%
+  cbind(getdata_upd("topictoagency10.csv", "_rolling10"))
 
 
-#### here we generate top1,2,3 topics 
-companyyear.melt.av <- company_year_topic.melt[,list(value = mean(value,na.rm = T)), by = "cik,variable"]
-companyyear.melt.av[,`:=`(topicmax1 = paste0("Topic", order(value, decreasing = T)[1]),
-                          topicmax2 = paste0("Topic", order(value, decreasing = T)[2]),
-                          topicmax3 = paste0("Topic", order(value, decreasing = T)[3])), by = "cik"]
+#### here we generate top1,2,3 topics
+companyyear.melt.av <- company_year_topic.melt[, list(value = mean(value, na.rm = T)), by = "cik,variable"]
+companyyear.melt.av[, `:=`(
+  topicmax1 = paste0("Topic", order(value, decreasing = T)[1]),
+  topicmax2 = paste0("Topic", order(value, decreasing = T)[2]),
+  topicmax3 = paste0("Topic", order(value, decreasing = T)[3])
+), by = "cik"]
 
 m <- match(company_year_topic.melt$cik, companyyear.melt.av$cik)
 company_year_topic.melt <- company_year_topic.melt %>% cbind(select(companyyear.melt.av[m], paste0("topicmax", 1:3)))
 
-topictoagency <- fread(paste0(data_path,"topicagencyyear.csv"))
-data <- topictoagency[,list(HHI = sum(AgencyPercent^2), Words = AllWords[1]), by = "TopicNumber,year"]
+topictoagency <- fread(paste0(data_path, "topicagencyyear.csv"))
+data <- topictoagency[, list(HHI = sum(AgencyPercent^2), Words = AllWords[1]), by = "TopicNumber,year"]
 data[, disp := 1 - HHI]
 data[, topic_year := paste(paste0("Topic", TopicNumber), year)]
 
 ### main topic
-main_topic <- company_year_topic.melt[,list(topic_main_year = which.max(value)), by = "cik,year"]
+main_topic <- company_year_topic.melt[, list(topic_main_year = which.max(value)), by = "cik,year"]
 companyyear <- companyyear %>% inner_join(main_topic)
-companyyear$regul.disp_main <- data$disp[match(paste0(companyyear$topic_main_year, companyyear$year), 
-                                                            paste0(data$TopicNumber, data$year))]
+companyyear$regul.disp_main <- data$disp[match(
+  paste0(companyyear$topic_main_year, companyyear$year),
+  paste0(data$TopicNumber, data$year)
+)]
 companyyear[, topic.disp_main := topic.disp]
 companyyear[, regul.complex.log_main := regul.complex.log]
 
@@ -366,14 +385,16 @@ m <- match(company_year_topic.melt$topic_year, data$topic_year)
 company_year_topic.melt$hhi_topic_agency <- data$HHI[m]
 company_year_topic.melt$fedreg_topic_words <- data$Words[m]
 
-### michelle asked for top3 across all companies 
-out1 <- company_year_topic.melt[!variable %in% paste0("Topic", c(31,2,59)) , list(topic.disp = 1 - sum(value^2),
-                                                                                                     regul.disp = 1 - sum(value * hhi_topic_agency),
-                                                                                                     regul.complex.log = sum(value * log(fedreg_topic_words))), by = 'cik,year']
+### michelle asked for top3 across all companies
+out1 <- company_year_topic.melt[!variable %in% paste0("Topic", c(31, 2, 59)), list(
+  topic.disp = 1 - sum(value^2),
+  regul.disp = 1 - sum(value * hhi_topic_agency),
+  regul.complex.log = sum(value * log(fedreg_topic_words))
+), by = "cik,year"]
 m <- match(paste(companyyear$cik, companyyear$year), paste(out1$cik, out1$year))
-companyyear$regul.disp_no3 <- out1$regul.disp[m] 
-companyyear$topic.disp_no3 <- out1$topic.disp[m] 
-companyyear$regul.complex.log_no3 <- out1$regul.complex.log[m] 
+companyyear$regul.disp_no3 <- out1$regul.disp[m]
+companyyear$topic.disp_no3 <- out1$topic.disp[m]
+companyyear$regul.complex.log_no3 <- out1$regul.complex.log[m]
 
 ##################################################################################
 ################## Three measures generation #####################################
@@ -382,18 +403,17 @@ companyyear$regul.complex.log_no3 <- out1$regul.complex.log[m]
 
 ### this function creates measures of frag/disp/complexity using the merged company_year_topic.melt datatable
 group_measures <- function(gr.col, tp) {
-
-  ### read manually coded groups 
+  ### read manually coded groups
   groups <- "/Users/evolkova/Dropbox/Projects/Govt Agenda/Sandbox/20210128/topic_labels_ML_KV_JK.csv" %>%
     fread(select = c("Topic", "Group_KV", "Group_JK2"))
   groups[, TopicNumber := paste0("Topic", Topic)]
-  
+
 
   ### then we re-estimate topic HHI
   topicstoagencies <- data_path %>%
     paste0("topicagencyyear.csv") %>%
     fread()
-  
+
   ### aggregate group information
   m <- match(topicstoagencies$TopicNumber, groups$Topic)
   topicstoagencies$group <- groups[[gr.col]][m]
@@ -403,7 +423,7 @@ group_measures <- function(gr.col, tp) {
 
   data <- topicstoagencies[, list(HHI = sum(GroupPercent^2, na.rm = T), Words = AllWords[1]), by = c("year,group")]
 
-  
+
 
   m <- match(company_year_topic.melt$variable, groups$TopicNumber)
   company_year_topic.melt$group <- groups[[gr.col]][m]
@@ -438,8 +458,8 @@ group_measures <- function(gr.col, tp) {
 }
 
 
-companyyear <- companyyear %>% 
-  cbind(group_measures("Group_KV", "_57"))%>% 
+companyyear <- companyyear %>%
+  cbind(group_measures("Group_KV", "_57")) %>%
   cbind(group_measures("Group_JK2", "_70"))
 
 
@@ -449,33 +469,35 @@ companyyear <- companyyear %>%
 ##################################################################################
 
 ### here we use all new topicstoagencies file and company.melt files
-get_measures <- function(topicfiles, agencyfile, tp, frm = ".csv"){
+get_measures <- function(topicfiles, agencyfile, tp, frm = ".csv") {
   ### reading 10K info
   companyyear.melt <- NULL
-  for(yr in 1995:2019){
+  for (yr in 1995:2019) {
     nm <- paste0(topicfiles, yr, frm)
-    if(frm == '.csv') tmp <- fread(nm)
-    if(frm == '.rds') tmp <- readRDS(nm)
+    if (frm == ".csv") tmp <- fread(nm)
+    if (frm == ".rds") tmp <- readRDS(nm)
     tmp$year <- yr
     companyyear.melt <- rbind(companyyear.melt, tmp)
   }
   colnames(companyyear.melt)[length(colnames(companyyear.melt)) - 1] <- "filename"
-  companyyear.melt <- melt(companyyear.melt, id.vars = c("filename","year"))
-  
+  companyyear.melt <- melt(companyyear.melt, id.vars = c("filename", "year"))
+
   ### reading fr info
   topicstoagencies <- fread(agencyfile)
   data <- topicstoagencies[, list(HHI = sum(AgencyPercent^2), Words = AllWords[1]), by = c("year,TopicNumber")]
-  m <- match(paste0(companyyear.melt$variable, companyyear.melt$year), paste0("Topic",data$TopicNumber, data$year))
+  m <- match(paste0(companyyear.melt$variable, companyyear.melt$year), paste0("Topic", data$TopicNumber, data$year))
   companyyear.melt$hhi_topic_agency <- data$HHI[m]
   companyyear.melt$fedreg_topic_words <- data$Words[m]
-  companyyear.melt <- companyyear.melt %>% data.table
-  
-  measures <- companyyear.melt[,list(regul.disp = 1 - sum(value * hhi_topic_agency, na.rm = T), 
-                                     topic.disp = 1 - sum(value^2,na.rm = T),
-                                     regul.complex.log = sum(value * log(fedreg_topic_words), na.rm = T)), by = "filename"]
-  
+  companyyear.melt <- companyyear.melt %>% data.table()
+
+  measures <- companyyear.melt[, list(
+    regul.disp = 1 - sum(value * hhi_topic_agency, na.rm = T),
+    topic.disp = 1 - sum(value^2, na.rm = T),
+    regul.complex.log = sum(value * log(fedreg_topic_words), na.rm = T)
+  ), by = "filename"]
+
   measures[, file := gsub("(\\.txt)|(\\.htm)", "", filename)]
-  
+
   m <- match(companyyear$file, measures$file)
   measures <- measures[m] %>% select("regul.disp", "topic.disp", "regul.complex.log")
   colnames(measures) <- colnames(measures) %>% paste0(tp)
@@ -508,19 +530,18 @@ companyyear <- companyyear %>% cbind(get_measures(topicfiles, agencyfile, "_item
 
 lobby <- readRDS("/Users/evolkova/Dropbox/Projects/Govt Agenda/Sandbox/20210406/lobby.rds")
 
-get_lobby <- function(m, names){
-  
-  companyyear$x <- lobby$amount[m] 
+get_lobby <- function(m, names) {
+  companyyear$x <- lobby$amount[m]
   companyyear[, lobbied := max(!is.na(x)), by = GVKEY]
   companyyear[, min_year := max(year)]
   companyyear[lobbied == 1, min_year := min(year[!is.na(x)]), by = GVKEY]
   companyyear[lobbied == 1 & year >= min_year & is.na(x), x := 0]
-  
-  companyyear[, logx := log(1 + x) %>% win]
-  companyyear[, x_sale := x/(10^6*sale) %>% win]
-  companyyear[, x_at := x/(10^6*at) %>% win]
-  companyyear[, x := x %>% win]
-  
+
+  companyyear[, logx := log(1 + x) %>% win()]
+  companyyear[, x_sale := x / (10^6 * sale) %>% win()]
+  companyyear[, x_at := x / (10^6 * at) %>% win()]
+  companyyear[, x := x %>% win()]
+
   out <- companyyear %>% select("x", "logx", "x_sale")
   colnames(out) <- names
   return(out)
@@ -539,59 +560,85 @@ companyyear <- companyyear %>%
 ##################################################################
 
 
-### 1. Hoberg-Phillips Peers 
+### 1. Hoberg-Phillips Peers
 ### source("./Misc/Hoberg_Philips_peers.R")
-peers <- fread(paste0(data_path,"/HP_peers.csv"))
-vars_need <- c("n_peers", "n_new_peers", "n_ipo" ,"n_leaving_peers", "n_delist", "n_poor_perf","n_peers_left_trading")
+peers <- fread(paste0(data_path, "/peers.csv"))
+vars_need <- c("n_ipo", "n_delist", "n_peers", "n_leaving_peers" ,"n_leaving_large_at_peers")
 
-create_vars <- function(companyyear, vec, title){
+create_vars <- function(companyyear, vec, title) {
   m <- match(vec, paste(peers$gvkey1, peers$year))
-  add <- peers[m] %>% select(vars_need)
-  
+  add <- peers[m] %>% select(all_of(vars_need))
+
   colnames(add) <- paste0(title, colnames(add))
-  for(i in 1:length(colnames(add))){
-    add[[i]][is.na(add[[i]])] <- 0
-    add[[i]] <- add[[i]] %>% win
+  for (i in 1:length(colnames(add))) {
+    add[[i]][is.na(add[[i]]) |is.nan(add[[i]]) | is.infinite(add[[i]])] <- 0
+    add[[i]] <- add[[i]] %>% win()
   }
   companyyear <- cbind(companyyear, add)
   return(companyyear)
 }
 
 
-companyyear <- companyyear %>% create_vars(paste(companyyear$GVKEY, companyyear$year + 1), "lead.")  %>% 
-  create_vars(paste(companyyear$GVKEY, companyyear$year), "")  
+companyyear <- companyyear %>%
+  create_vars(paste(companyyear$GVKEY, companyyear$year + 1), "lead.") %>%
+  create_vars(paste(companyyear$GVKEY, companyyear$year), "")
 
 companyyear$lead.n_join <- (companyyear$lead.n_ipo - companyyear$lead.n_delist)
-companyyear$lead.n_left <- 100*(companyyear$lead.n_peers_left_trading/companyyear$n_peers)
+companyyear$lead.n_left <- 100 * (companyyear$lead.n_peers_left_trading / companyyear$n_peers)
 
-### 2  Coauthored topics 
+tmp <- fread("/Users/evolkova/Dropbox/Projects/Govt Agenda/Sandbox/20230329 todo list/peers.csv")
+m <- match(paste0(companyyear$GVKEY, companyyear$year), paste0(tmp$gvkey1, tmp$year + 1))
+companyyear$lead.n_leaving_large_at_peers <- tmp$n_leaving_large_at_peers[m] %>% win %>% nm
+companyyear$lead.n_leaving_large_sale_peers <- tmp$n_leaving_large_sale_peers[m] %>% win %>% nm
+
+fix <- function(x) {
+  x[is.nan(x)|is.infinite(x)] <- NA
+  return(x)
+}
+companyyear$lead.n_leaving_large_at_peers_scaled <- (companyyear$lead.n_leaving_large_at_peers/companyyear$n_peers) %>% fix  %>% win %>% nm
+companyyear$lead.n_leaving_large_at_peers_scaled_norm <- companyyear$lead.n_leaving_large_at_peers_scaled %>% nm
+
+companyyear$lead.n_leaving_large_sale_peers_scaled <- (companyyear$lead.n_leaving_large_sale_peers/companyyear$n_peers) %>% fix %>% win
+companyyear$lead.n_leaving_large_sale_peers_scaled_norm <- companyyear$lead.n_leaving_large_sale_peers_scaled %>% nm
+
+
+companyyear$lead.n_leaving_small_at_peers_scaled <- ((companyyear$lead.n_leaving_peers - companyyear$lead.n_leaving_large_at_peers)/companyyear$n_peers) 
+companyyear$lead.n_leaving_small_at_peers_scaled <- companyyear$lead.n_leaving_small_at_peers_scaled %>% fix  %>% win 
+companyyear$lead.n_leaving_small_at_peers_scaled_norm <- companyyear$lead.n_leaving_small_at_peers_scaled %>% nm
+
+companyyear$lead.n_leaving_small_sale_peers_scaled <- ((companyyear$lead.n_leaving_peers -companyyear$lead.n_leaving_large_sale_peers)/companyyear$n_peers) 
+companyyear$lead.n_leaving_small_sale_peers_scaled <- companyyear$lead.n_leaving_small_sale_peers_scaled %>% fix %>% win %>% nm
+companyyear$lead.n_leaving_small_sale_peers_scaled <- companyyear$lead.n_leaving_small_sale_peers_scaled %>% nm
+
+
+### 2  Coauthored topics
 ### source("./Misc/topic_coauthorship.R")
 coauthored <- fread(paste0(data_path, "/topic_coauthorship.csv"))
-companyyeartopic <- companyyear %>% 
-  select("cik", "year", "Words10K", paste0("Topic", 1:100)) %>% 
-  melt(id.vars = c("cik", "year", "Words10K")) %>% 
-  mutate(words = Words10K*value) %>% 
-  left_join(coauthored) %>% 
+companyyeartopic <- companyyear %>%
+  select("cik", "year", "Words10K", all_of(paste0("Topic", 1:100))) %>%
+  melt(id.vars = c("cik", "year", "Words10K")) %>%
+  mutate(words = Words10K * value) %>%
+  left_join(coauthored) %>%
   mutate(solo_topic = 0)
 
 companyyeartopic[Solo_words > quantile(Solo_words, 0.5, na.rm = T), solo_topic := 1]
-companyyeartopic[, solo_topic_words := sum(words*solo_topic), by = "cik,year"]
-companyyeartopic[, coauthored_topic_words := sum(words*(1 - solo_topic)), by = "cik,year"]
+companyyeartopic[, solo_topic_words := sum(words * solo_topic), by = "cik,year"]
+companyyeartopic[, coauthored_topic_words := sum(words * (1 - solo_topic)), by = "cik,year"]
 companyyeartopic[, coauthored := 1]
 companyyeartopic[solo_topic_words >= coauthored_topic_words, coauthored := 0]
 
-indicator <- companyyeartopic[,list(coauthored = coauthored[1]), by = "cik,year"]
+indicator <- companyyeartopic[, list(coauthored = coauthored[1]), by = "cik,year"]
 companyyear <- companyyear %>% inner_join(indicator)
 
 # 3. Measure verification
-agencies_in_notices.melt <- "/Users/evolkova/Dropbox/Projects/Govt Agenda/Sandbox/JF_1_Revision_R1_4_and_R2_2.1/agencies_in_notices.csv" %>% fread
-agencies_in_notices <- agencies_in_notices.melt[,list(Ndocuments = length(unique(document_number))),by = "gvkey,year,parent_agency_notice"]
+agencies_in_notices.melt <- "/Users/evolkova/Dropbox/Projects/Govt Agenda/Sandbox/JF_1_Revision_R1_4_and_R2_2.1/agencies_in_notices.csv" %>% fread()
+agencies_in_notices <- agencies_in_notices.melt[, list(Ndocuments = length(unique(document_number))), by = "gvkey,year,parent_agency_notice"]
 
 
-colnames(agencies_in_notices) <- c("GVKEY","year", "parent_agency", "Ndocuments")
+colnames(agencies_in_notices) <- c("GVKEY", "year", "parent_agency", "Ndocuments")
 agencies_in_notices[, all_docs := sum(Ndocuments), by = "GVKEY,year"]
-agencies_in_notices[, frac := (Ndocuments/all_docs)^2]
-agencies_in_notices <- agencies_in_notices[,list(notice_dispersion = 1 - sum(frac)),by = "GVKEY,year"]
+agencies_in_notices[, frac := (Ndocuments / all_docs)^2]
+agencies_in_notices <- agencies_in_notices[, list(notice_dispersion = 1 - sum(frac)), by = "GVKEY,year"]
 
 
 m <- match(paste(companyyear$GVKEY, companyyear$year), paste(agencies_in_notices$GVKEY, agencies_in_notices$year))
@@ -599,23 +646,46 @@ companyyear$company_FR.frag <- agencies_in_notices$notice_dispersion[m]
 
 
 ### getting 10K data
-agencies_in_10K <- "/Users/evolkova/Dropbox/Projects/Govt Agenda/Sandbox/JF_1_Revision_R1_4_and_R2_2.1/agencies_in_10Ks.csv" %>% fread
+agencies_in_10K <- "/Users/evolkova/Dropbox/Projects/Govt Agenda/Sandbox/JF_1_Revision_R1_4_and_R2_2.1/agencies_in_10Ks.csv" %>% fread()
 agencies_in_10K <- agencies_in_10K[, list(mentions = sum(mentions)), by = "GVKEY,year,parent_agency"]
 
-agencies_in_10K <- agencies_in_10K[, list(parent_agency = paste0(unique(parent_agency), collapse = ";"),
-                                          parent_agency_mentions = paste0(mentions, collapse = ";")), 
-                                   by = "GVKEY,year"]
+agencies_in_10K <- agencies_in_10K[, list(
+  parent_agency = paste0(unique(parent_agency), collapse = ";"),
+  parent_agency_mentions = paste0(mentions, collapse = ";")
+),
+by = "GVKEY,year"
+]
 setkey(agencies_in_10K, GVKEY, year)
 
 m <- match(paste(companyyear$GVKEY, companyyear$year), paste(agencies_in_10K$GVKEY, agencies_in_10K$year))
-companyyear$parent_agencies_10K_mention <- agencies_in_10K$parent_agency_mentions[m] 
+companyyear$parent_agencies_10K_mention <- agencies_in_10K$parent_agency_mentions[m]
 
 companyyear[, agencies_10K.frag := dsp(parent_agencies_10K_mention), by = "GVKEY,year"]
 companyyear$agencies_10K.frag[is.na(companyyear$agencies_10K.frag)] <- 0
 
+snp1500 <- fread("/Users/evolkova/Dropbox/Projects/Govt Agenda/Sandbox/JF_1_Revision_R1_4_and_R2_2.1/execucomp.csv", select = c("GVKEY", "YEAR", "SPCODE")) %>%
+  filter(SPCODE %in% c("MD", "SM", "SP")) %>% 
+  mutate(gvkey_year = paste(GVKEY, YEAR))
+
+### we searched for these companies but did not find anything 
+### => fragmentation is one
+companyyear[paste(GVKEY, year) %in% snp1500$gvkey_year, company_FR.frag := 1] 
 ##################################################################
 ###################### Write results  ############################
 ##################################################################
 
 fwrite(companyyear, paste0(data_path, "companyyear.csv"))
 saveRDS(companyyear, paste0(data_path, "companyyear.rds"))
+
+##################################################################
+################### Make final samples  ##########################
+##################################################################
+
+### this is just a file with functions that winsorise, 
+### normalize variables and drops NA
+
+companyyear <- readRDS(paste0(data_path, "companyyear.rds"))
+source("/Users/evolkova/Dropbox/Projects/Govt Agenda/Code/Gov_Agenda/Misc/main_functions.R")
+companyyear <- prep_cy(data_path)
+
+saveRDS(companyyear, paste0(data_path, "companyyear_final.rds"))
